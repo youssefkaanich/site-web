@@ -1,0 +1,138 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Process;
+
+class ExtractionController extends Controller
+{
+    private const DOSSIER_PYTHON = 'C:\\STAGE\\projet sopal';
+
+    private const SCRIPTS = [
+        'gmail' => 'extract_gmail_commandes.py',
+        'outlook' => 'extract_outlook_commandes.py',
+    ];
+
+    /** Durée maximale d'une surveillance avant arrêt automatique (1 jour). */
+    private const DUREE_MAX_SECONDES = 86400;
+
+    public function start(string $source)
+    {
+        if (!isset(self::SCRIPTS[$source])) {
+            abort(404);
+        }
+
+        if (self::estActif($source)) {
+            return back();
+        }
+
+        $pid = self::lancerCache(self::SCRIPTS[$source]);
+
+        Cache::forever("extraction:{$source}:pid", $pid);
+        Cache::forever("extraction:{$source}:demarre_a", time());
+
+        return back();
+    }
+
+    /**
+     * Lance le script Python complètement détaché (via PowerShell Start-Process),
+     * sans fenêtre visible et sans dépendre du processus PHP qui l'a démarré.
+     * Retourne le PID réel de python.exe.
+     */
+    private static function lancerCache(string $script): int
+    {
+        $commandePs = sprintf(
+            '$p = Start-Process -FilePath python -ArgumentList %s -WorkingDirectory %s -WindowStyle Hidden -PassThru; $p.Id',
+            self::psQuote($script),
+            self::psQuote(self::DOSSIER_PYTHON)
+        );
+
+        $result = Process::env(self::env())
+            ->run(['powershell', '-NoProfile', '-Command', $commandePs]);
+
+        return (int) trim($result->output());
+    }
+
+    private static function psQuote(string $valeur): string
+    {
+        return "'".str_replace("'", "''", $valeur)."'";
+    }
+
+    public function stop(string $source)
+    {
+        if (!isset(self::SCRIPTS[$source])) {
+            abort(404);
+        }
+
+        self::arreter($source);
+
+        return back();
+    }
+
+    private static function arreter(string $source): void
+    {
+        $pid = Cache::get("extraction:{$source}:pid");
+
+        if ($pid) {
+            Process::run(['taskkill', '/PID', $pid, '/T', '/F']);
+        }
+
+        Cache::forget("extraction:{$source}:pid");
+        Cache::forget("extraction:{$source}:demarre_a");
+    }
+
+    /** Statut des deux extractions, utilisé par CommandeController pour l'afficher sur la page. */
+    public static function statut(): array
+    {
+        return [
+            'gmail' => self::estActif('gmail'),
+            'outlook' => self::estActif('outlook'),
+        ];
+    }
+
+    private static function estActif(string $source): bool
+    {
+        $pid = Cache::get("extraction:{$source}:pid");
+        if (!$pid) {
+            return false;
+        }
+
+        $demarre = Cache::get("extraction:{$source}:demarre_a");
+
+        // Arrêt automatique après la durée maximale (1 jour), même si le processus tourne encore.
+        if ($demarre && (time() - $demarre) >= self::DUREE_MAX_SECONDES) {
+            self::arreter($source);
+
+            return false;
+        }
+
+        $result = Process::run(['tasklist', '/FI', "PID eq {$pid}"]);
+        $vivant = str_contains($result->output(), (string) $pid);
+
+        if (!$vivant) {
+            // Juste après le démarrage, Windows peut mettre une seconde ou deux à faire
+            // apparaître le processus dans tasklist : on évite de le déclarer mort trop vite.
+            if ($demarre && (time() - $demarre) < 5) {
+                return true;
+            }
+
+            Cache::forget("extraction:{$source}:pid");
+            Cache::forget("extraction:{$source}:demarre_a");
+        }
+
+        return $vivant;
+    }
+
+    private static function env(): array
+    {
+        return [
+            'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows',
+            'PATH' => getenv('PATH'),
+            'TEMP' => getenv('TEMP'),
+            'TMP' => getenv('TMP'),
+            'PYTHONIOENCODING' => 'utf-8',
+            'PYTHONUTF8' => '1',
+        ];
+    }
+}
