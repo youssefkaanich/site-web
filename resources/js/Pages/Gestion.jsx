@@ -248,6 +248,12 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
         }
     }
 
+    function viderAnciennes() {
+        if (confirm('Envoyer toutes les commandes "ancienne" à la corbeille ? Tu pourras les restaurer depuis la corbeille.')) {
+            router.post('/commandes/vider-anciennes');
+        }
+    }
+
     return (
         <AppLayout
             title="Gestion des commandes"
@@ -320,12 +326,20 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                 ) : (
                     <span />
                 )}
-                <button
-                    onClick={openAdd}
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90"
-                >
-                    + Ajouter une commande
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={viderAnciennes}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50"
+                    >
+                        🗑️ Vider les anciennes
+                    </button>
+                    <button
+                        onClick={openAdd}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90"
+                    >
+                        + Ajouter une commande
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">

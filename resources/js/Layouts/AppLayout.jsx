@@ -34,6 +34,7 @@ export default function AppLayout({ title, subtitle, children }) {
                     <nav className="flex-1 px-3 py-5 space-y-1">
                         <NavLink href="/gestion" label="Gestion" active={url.startsWith('/gestion')} />
                         <NavLink href="/analyse" label="Analyse" active={url.startsWith('/analyse')} />
+                        <NavLink href="/corbeille" label="🗑️ Corbeille" active={url.startsWith('/corbeille')} />
                     </nav>
 
                     <div className="px-4 py-4 border-t border-white/10">
