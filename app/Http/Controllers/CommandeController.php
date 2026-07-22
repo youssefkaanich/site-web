@@ -104,6 +104,17 @@ class CommandeController extends Controller
         return redirect()->route('gestion');
     }
 
+    /** Supprime définitivement plusieurs commandes sélectionnées. */
+    public function destroySelection(Request $request)
+    {
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
+
+        Commande::whereIn('id', $ids)->forceDelete();
+        self::renumeroterIds();
+
+        return redirect()->route('gestion');
+    }
+
     /** Envoie à la corbeille (récupérable) toutes les commandes au statut "ancienne". */
     public function viderAnciennes()
     {
@@ -124,6 +135,27 @@ class CommandeController extends Controller
     public function restaurer(int $id)
     {
         Commande::onlyTrashed()->findOrFail($id)->restore();
+
+        return redirect()->route('corbeille');
+    }
+
+    /** Restaure plusieurs commandes sélectionnées dans la corbeille. */
+    public function restaurerSelection(Request $request)
+    {
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
+
+        Commande::onlyTrashed()->whereIn('id', $ids)->restore();
+
+        return redirect()->route('corbeille');
+    }
+
+    /** Supprime définitivement plusieurs commandes sélectionnées dans la corbeille. */
+    public function supprimerSelection(Request $request)
+    {
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
+
+        Commande::onlyTrashed()->whereIn('id', $ids)->forceDelete();
+        self::renumeroterIds();
 
         return redirect()->route('corbeille');
     }

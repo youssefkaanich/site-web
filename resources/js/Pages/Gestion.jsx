@@ -125,11 +125,12 @@ function CommandeModal({ commande, onClose }) {
     return (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             <div
-                className={`bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-h-[90vh] overflow-y-auto flex flex-col ${
+                className={`bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full h-[85vh] flex flex-col ${
                     avecApercu ? 'max-w-6xl' : 'max-w-3xl'
                 }`}
             >
-                <div className="px-6 py-4 border-b dark:border-gray-700 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10">
+                {/* En-tête fixe (ne défile pas) */}
+                <div className="px-6 py-4 border-b dark:border-gray-700 flex items-center justify-between shrink-0">
                     <h2 className="text-lg font-bold text-[#0d2b52] dark:text-white">
                         {isEdit ? `Modifier la commande #${commande.id}` : 'Ajouter une commande'}
                     </h2>
@@ -138,78 +139,80 @@ function CommandeModal({ commande, onClose }) {
                     </button>
                 </div>
 
-                <div className={avecApercu ? 'flex flex-col md:flex-row overflow-hidden' : ''}>
+                {/* Zone centrale : chaque colonne défile indépendamment (min-h-0 = clé pour que le scroll marche dans un flexbox) */}
+                <div className={`flex-1 min-h-0 overflow-y-auto ${avecApercu ? 'flex flex-col md:flex-row' : 'flex flex-col'}`}>
                     {avecImage && (
-                        <div className="md:w-1/2 p-6 border-b md:border-b-0 md:border-r dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-start justify-center">
+                        <div className="md:w-1/2 md:min-h-0 md:overflow-y-auto p-6 border-b md:border-b-0 md:border-r dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-start justify-center">
                             <img
                                 src={`/storage/${commande.Image_Path}`}
                                 alt="Image du mail"
-                                className="max-w-full max-h-[70vh] rounded-lg shadow object-contain"
+                                className="max-w-full rounded-lg shadow object-contain"
                             />
                         </div>
                     )}
 
                     {avecTexte && (
-                        <div className="md:w-1/2 p-6 border-b md:border-b-0 md:border-r dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                        <div className="md:w-1/2 md:min-h-0 md:overflow-y-auto p-6 border-b md:border-b-0 md:border-r dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Texte original du mail</p>
-                            <pre className="whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 rounded-lg shadow p-4 max-h-[70vh] overflow-y-auto select-text font-sans">
+                            <pre className="whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 rounded-lg shadow p-4 select-text font-sans">
                                 {commande.Texte_Mail}
                             </pre>
                         </div>
                     )}
 
-                <form
-                    onSubmit={submit}
-                    className={`p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 ${avecApercu ? 'md:w-1/2' : ''}`}
-                >
-                    {COLUMNS.filter((c) => c.key !== 'id').map((col) => (
-                        <div key={col.key} className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">{col.label}</label>
-                            {col.key === 'Urgent' ? (
-                                <select
-                                    value={data.Urgent || ''}
-                                    onChange={(e) => setData('Urgent', e.target.value)}
-                                    className="border dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
-                                >
-                                    <option value="">—</option>
-                                    <option value="OUI">OUI</option>
-                                </select>
-                            ) : col.key === 'Note' ? (
-                                <textarea
-                                    value={data.Note || ''}
-                                    onChange={(e) => setData('Note', e.target.value)}
-                                    rows={2}
-                                    className="border dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
-                                />
-                            ) : (
-                                <input
-                                    type="text"
-                                    value={data[col.key] ?? ''}
-                                    onChange={(e) => setData(col.key, e.target.value)}
-                                    className="border dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
-                                />
-                            )}
-                            {errors[col.key] && <span className="text-xs text-red-600 dark:text-red-400">{errors[col.key]}</span>}
-                        </div>
-                    ))}
-
-                    <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={processing}
-                            className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90 disabled:opacity-50"
-                        >
-                            {isEdit ? 'Enregistrer' : 'Ajouter'}
-                        </button>
+                    <div className={`md:min-h-0 md:overflow-y-auto ${avecApercu ? 'md:w-1/2' : ''}`}>
+                        <form id="form-commande" onSubmit={submit} className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {COLUMNS.filter((c) => c.key !== 'id').map((col) => (
+                                <div key={col.key} className="flex flex-col gap-1">
+                                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">{col.label}</label>
+                                    {col.key === 'Urgent' ? (
+                                        <select
+                                            value={data.Urgent || ''}
+                                            onChange={(e) => setData('Urgent', e.target.value)}
+                                            className="border dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
+                                        >
+                                            <option value="">—</option>
+                                            <option value="OUI">OUI</option>
+                                        </select>
+                                    ) : col.key === 'Note' ? (
+                                        <textarea
+                                            value={data.Note || ''}
+                                            onChange={(e) => setData('Note', e.target.value)}
+                                            rows={2}
+                                            className="border dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
+                                        />
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={data[col.key] ?? ''}
+                                            onChange={(e) => setData(col.key, e.target.value)}
+                                            className="border dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
+                                        />
+                                    )}
+                                    {errors[col.key] && <span className="text-xs text-red-600 dark:text-red-400">{errors[col.key]}</span>}
+                                </div>
+                            ))}
+                        </form>
                     </div>
-                </form>
+                </div>
+
+                {/* Pied fixe (toujours visible, pas besoin de descendre tout en bas) */}
+                <div className="px-6 py-4 border-t dark:border-gray-700 flex justify-end gap-3 shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        type="submit"
+                        form="form-commande"
+                        disabled={processing}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90 disabled:opacity-50"
+                    >
+                        {isEdit ? 'Enregistrer' : 'Ajouter'}
+                    </button>
                 </div>
             </div>
         </div>
@@ -251,6 +254,7 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
     );
     const [celluleEdition, setCelluleEdition] = useState(null); // { id, col } | null
     const [valeurEdition, setValeurEdition] = useState('');
+    const [selection, setSelection] = useState([]); // liste des id cochés
 
     function demarrerEdition(c, col) {
         if (col === 'id') return;
@@ -330,6 +334,31 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
         }
     }
 
+    const touteSelectionnee =
+        commandesAffichees.length > 0 && commandesAffichees.every((c) => selection.includes(c.id));
+
+    function basculerTout() {
+        if (touteSelectionnee) {
+            setSelection((sel) => sel.filter((id) => !commandesAffichees.some((c) => c.id === id)));
+        } else {
+            setSelection((sel) => [...new Set([...sel, ...commandesAffichees.map((c) => c.id)])]);
+        }
+    }
+
+    function basculerUne(id) {
+        setSelection((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
+    }
+
+    function supprimerSelection() {
+        if (confirm(`Supprimer définitivement ${selection.length} commande(s) ? Cette action est irréversible.`)) {
+            router.post(
+                '/commandes/supprimer-selection',
+                { ids: selection },
+                { preserveScroll: true, onSuccess: () => setSelection([]) }
+            );
+        }
+    }
+
     return (
         <AppLayout
             title="Gestion des commandes"
@@ -396,6 +425,28 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                 />
             </div>
 
+            {selection.length > 0 && (
+                <div className="flex items-center justify-between mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 rounded-xl px-4 py-3">
+                    <span className="text-sm font-semibold text-[#0d2b52] dark:text-blue-300">
+                        {selection.length} commande(s) sélectionnée(s)
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setSelection([])}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-white hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700"
+                        >
+                            Annuler la sélection
+                        </button>
+                        <button
+                            onClick={supprimerSelection}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/30 dark:hover:bg-red-900/50"
+                        >
+                            🗑️ Supprimer la sélection
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="flex items-center justify-between mb-4">
                 {filtre ? (
                     <button
@@ -433,6 +484,7 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                 <div className="overflow-x-auto">
                 <table className="w-full text-sm table-fixed border-collapse">
                     <colgroup>
+                        <col style={{ width: 40 }} />
                         {COLUMNS.map((col) => (
                             <col key={col.key} style={{ width: widths[col.key] }} />
                         ))}
@@ -440,6 +492,14 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                     </colgroup>
                     <thead>
                         <tr className="text-left text-gray-500 dark:text-gray-400">
+                            <th className="sticky top-0 z-[1] px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 shadow-[0_1px_0_0_rgba(0,0,0,0.04)]">
+                                <input
+                                    type="checkbox"
+                                    checked={touteSelectionnee}
+                                    onChange={basculerTout}
+                                    className="rounded border-gray-300 dark:border-gray-600"
+                                />
+                            </th>
                             {COLUMNS.map((col) => (
                                 <th
                                     key={col.key}
@@ -472,9 +532,19 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                             <tr
                                 key={c.id}
                                 className={`border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors ${
-                                    index % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/40' : 'bg-white dark:bg-gray-900'
+                                    selection.includes(c.id)
+                                        ? 'bg-blue-50/60 dark:bg-blue-900/20'
+                                        : index % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/40' : 'bg-white dark:bg-gray-900'
                                 }`}
                             >
+                                <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800">
+                                    <input
+                                        type="checkbox"
+                                        checked={selection.includes(c.id)}
+                                        onChange={() => basculerUne(c.id)}
+                                        className="rounded border-gray-300 dark:border-gray-600"
+                                    />
+                                </td>
                                 {COLUMNS.map((col) => {
                                     const enEdition = celluleEdition?.id === c.id && celluleEdition?.col === col.key;
 
@@ -587,7 +657,7 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                         ))}
                         {commandesAffichees.length === 0 && (
                             <tr>
-                                <td colSpan={COLUMNS.length + 1} className="px-4 py-8 text-center text-gray-400 dark:text-gray-600">
+                                <td colSpan={COLUMNS.length + 2} className="px-4 py-8 text-center text-gray-400 dark:text-gray-600">
                                     {filtre ? 'Aucune commande ne correspond à ce filtre.' : 'Aucune commande pour le moment.'}
                                 </td>
                             </tr>
