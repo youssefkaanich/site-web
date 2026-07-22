@@ -8,7 +8,12 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/gestion', [CommandeController::class, 'index'])->name('gestion');
+Route::get('/commandes', [CommandeController::class, 'index'])->name('gestion');
+Route::get('/stock-production', fn () => \Inertia\Inertia::render('StockProduction'))->name('stockProduction');
+Route::get('/analyse', [CommandeController::class, 'analyse'])->name('analyse');
+
+// Anciennes URL (avant renommage) : redirigent vers les nouvelles pour ne pas casser les favoris/liens.
+Route::redirect('/gestion', '/commandes');
 Route::post('/commandes', [CommandeController::class, 'store'])->name('commandes.store');
 Route::put('/commandes/{commande}', [CommandeController::class, 'update'])->name('commandes.update');
 Route::delete('/commandes/{commande}', [CommandeController::class, 'destroy'])->name('commandes.destroy');

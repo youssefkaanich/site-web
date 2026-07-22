@@ -160,6 +160,64 @@ class CommandeController extends Controller
         return redirect()->route('corbeille');
     }
 
+    /** Tableau de bord : statistiques et graphiques calculés à partir des commandes en base. */
+    public function analyse()
+    {
+        $commandes = Commande::all(['id', 'Date_mail', 'Source', 'Article', 'Destination', 'Urgent', 'statut']);
+
+        $parStatut = $commandes
+            ->groupBy(fn (Commande $c) => $c->statut ?: 'Inconnu')
+            ->map->count()
+            ->sortDesc();
+
+        $parSource = $commandes
+            ->groupBy(fn (Commande $c) => $c->Source ?: 'Inconnu')
+            ->map->count()
+            ->sortDesc();
+
+        $parJour = collect();
+        for ($i = 13; $i >= 0; $i--) {
+            $parJour[now()->subDays($i)->format('Y-m-d')] = 0;
+        }
+        foreach ($commandes as $c) {
+            if (!$c->Date_mail) {
+                continue;
+            }
+            try {
+                $jour = \Carbon\Carbon::parse($c->Date_mail)->format('Y-m-d');
+            } catch (\Exception $e) {
+                continue;
+            }
+            if ($parJour->has($jour)) {
+                $parJour[$jour] = $parJour[$jour] + 1;
+            }
+        }
+
+        $topArticles = $commandes
+            ->filter(fn (Commande $c) => $c->Article)
+            ->groupBy('Article')
+            ->map->count()
+            ->sortDesc()
+            ->take(5);
+
+        $topDestinations = $commandes
+            ->filter(fn (Commande $c) => $c->Destination)
+            ->groupBy('Destination')
+            ->map->count()
+            ->sortDesc()
+            ->take(5);
+
+        return \Inertia\Inertia::render('Analyse', [
+            'total' => $commandes->count(),
+            'urgentes' => $commandes->where('Urgent', 'OUI')->count(),
+            'parStatut' => $parStatut,
+            'parSource' => $parSource,
+            'parJour' => $parJour,
+            'topArticles' => $topArticles,
+            'topDestinations' => $topDestinations,
+        ]);
+    }
+
     /** Télécharge toutes les commandes en vrai fichier Excel (.xlsx). */
     public function export()
     {

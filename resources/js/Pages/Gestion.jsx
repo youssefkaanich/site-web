@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm, router } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
+import { useResizableColumns } from '../hooks/useResizableColumns';
 
 const COLUMNS = [
     { key: 'id', label: 'ID', width: 60, numeric: true },
@@ -46,35 +47,6 @@ const EMPTY_FORM = {
     Note: '',
     statut: '',
 };
-
-function useResizableColumns(initialWidths) {
-    const [widths, setWidths] = useState(initialWidths);
-    const [colonneActive, setColonneActive] = useState(null); // colonne en cours de redimensionnement
-
-    function startResize(e, key) {
-        e.preventDefault();
-        const startX = e.clientX;
-        const startWidth = widths[key];
-        setColonneActive(key);
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-
-        function onMouseMove(ev) {
-            setWidths((w) => ({ ...w, [key]: Math.max(50, startWidth + (ev.clientX - startX)) }));
-        }
-        function onMouseUp() {
-            setColonneActive(null);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    }
-
-    return [widths, startResize, colonneActive];
-}
 
 function gmailSearchUrl(messageId) {
     const clean = messageId.replace(/^<|>$/g, '');
