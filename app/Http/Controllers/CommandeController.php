@@ -128,6 +128,64 @@ class CommandeController extends Controller
         return redirect()->route('corbeille');
     }
 
+    /** Télécharge toutes les commandes en vrai fichier Excel (.xlsx). */
+    public function export()
+    {
+        $colonnes = [
+            'id' => 'ID',
+            'Message_ID' => 'Message ID',
+            'Date_mail' => 'Date mail',
+            'Source' => 'Source',
+            'Article' => 'Article',
+            'Designation' => 'Désignation',
+            'Qte_demandee' => 'Qté demandée',
+            'Reste_a_livrer' => 'Reste à livrer',
+            'Qte_en_rupture' => 'Qté en rupture',
+            'Qte_allouee' => 'Qté allouée',
+            'Qte_a_allouer' => 'Qté à allouer',
+            'Site_exp' => 'Site exp.',
+            'UV' => 'UV',
+            'Destination' => 'Destination',
+            'Echeance' => 'Échéance',
+            'Echeance_date' => 'Date échéance',
+            'Urgent' => 'Urgent',
+            'Note' => 'Note',
+            'statut' => 'Statut',
+        ];
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $feuille = $spreadsheet->getActiveSheet();
+        $feuille->setTitle('Commandes');
+
+        $feuille->fromArray(array_values($colonnes), null, 'A1');
+        $feuille->getStyle('A1:'.\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($colonnes)).'1')
+            ->getFont()->setBold(true);
+
+        $ligne = 2;
+        Commande::orderBy('id')->chunk(200, function ($commandes) use ($feuille, $colonnes, &$ligne) {
+            foreach ($commandes as $commande) {
+                $valeurs = [];
+                foreach (array_keys($colonnes) as $champ) {
+                    $valeurs[] = $commande->{$champ};
+                }
+                $feuille->fromArray($valeurs, null, 'A'.$ligne);
+                $ligne++;
+            }
+        });
+
+        foreach (range('A', \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($colonnes))) as $colonne) {
+            $feuille->getColumnDimension($colonne)->setAutoSize(true);
+        }
+
+        $nomFichier = 'commandes_sopal_'.now()->format('Y-m-d_His').'.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save('php://output');
+        }, $nomFichier, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
     private function validated(Request $request): array
     {
         return $request->validate([

@@ -31,6 +31,7 @@ class ExtractionController extends Controller
 
         Cache::forever("extraction:{$source}:pid", $pid);
         Cache::forever("extraction:{$source}:demarre_a", time());
+        Cache::forever("extraction:{$source}:vu_vivant_a", time());
 
         return back();
     }
@@ -75,11 +76,12 @@ class ExtractionController extends Controller
         $pid = Cache::get("extraction:{$source}:pid");
 
         if ($pid) {
-            Process::run(['taskkill', '/PID', $pid, '/T', '/F']);
+            Process::env(self::env())->run(['taskkill', '/PID', $pid, '/T', '/F']);
         }
 
         Cache::forget("extraction:{$source}:pid");
         Cache::forget("extraction:{$source}:demarre_a");
+        Cache::forget("extraction:{$source}:vu_vivant_a");
     }
 
     /** Statut des deux extractions, utilisé par CommandeController pour l'afficher sur la page. */
@@ -88,7 +90,23 @@ class ExtractionController extends Controller
         return [
             'gmail' => self::estActif('gmail'),
             'outlook' => self::estActif('outlook'),
+            'message_gmail' => self::lireMessage('gmail'),
+            'message_outlook' => self::lireMessage('outlook'),
         ];
+    }
+
+    /** Dernier message d'activité écrit par le script Python (voir ecrire_statut côté Python). */
+    private static function lireMessage(string $source): ?string
+    {
+        $chemin = storage_path("app/statut_extraction/{$source}.json");
+
+        if (!file_exists($chemin)) {
+            return null;
+        }
+
+        $donnees = json_decode(file_get_contents($chemin), true);
+
+        return $donnees['message'] ?? null;
     }
 
     private static function estActif(string $source): bool
@@ -107,21 +125,28 @@ class ExtractionController extends Controller
             return false;
         }
 
-        $result = Process::run(['tasklist', '/FI', "PID eq {$pid}"]);
+        $result = Process::env(self::env())->run(['tasklist', '/FI', "PID eq {$pid}"]);
         $vivant = str_contains($result->output(), (string) $pid);
 
-        if (!$vivant) {
-            // Juste après le démarrage, Windows peut mettre une seconde ou deux à faire
-            // apparaître le processus dans tasklist : on évite de le déclarer mort trop vite.
-            if ($demarre && (time() - $demarre) < 5) {
-                return true;
-            }
+        if ($vivant) {
+            Cache::forever("extraction:{$source}:vu_vivant_a", time());
 
-            Cache::forget("extraction:{$source}:pid");
-            Cache::forget("extraction:{$source}:demarre_a");
+            return true;
         }
 
-        return $vivant;
+        // `tasklist` peut parfois rater un processus qui tourne pourtant bien
+        // (ralentissement ponctuel de Windows). On ne déclare "mort" que si
+        // ça fait plusieurs secondes qu'on ne l'a plus vu, pas au premier raté.
+        $vuVivantA = Cache::get("extraction:{$source}:vu_vivant_a", $demarre);
+        if ($vuVivantA && (time() - $vuVivantA) < 10) {
+            return true;
+        }
+
+        Cache::forget("extraction:{$source}:pid");
+        Cache::forget("extraction:{$source}:demarre_a");
+        Cache::forget("extraction:{$source}:vu_vivant_a");
+
+        return false;
     }
 
     private static function env(): array
@@ -133,6 +158,8 @@ class ExtractionController extends Controller
             'TMP' => getenv('TMP'),
             'PYTHONIOENCODING' => 'utf-8',
             'PYTHONUTF8' => '1',
+            'SOPAL_APP_PASSWORD' => env('SOPAL_APP_PASSWORD'),
+            'CEREBRAS_API_KEY' => env('CEREBRAS_API_KEY'),
         ];
     }
 }

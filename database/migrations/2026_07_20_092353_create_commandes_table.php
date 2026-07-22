@@ -38,6 +38,8 @@ return new class extends Migration
             $table->text('Note')->nullable();
             $table->string('Extraction', 50)->nullable();
             $table->string('statut', 50)->default('nouvelle');
+            $table->string('Image_Path')->nullable();
+            $table->text('Texte_Mail')->nullable();
             $table->softDeletes();
         });
     }

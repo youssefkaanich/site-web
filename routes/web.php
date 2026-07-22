@@ -13,6 +13,7 @@ Route::post('/commandes', [CommandeController::class, 'store'])->name('commandes
 Route::put('/commandes/{commande}', [CommandeController::class, 'update'])->name('commandes.update');
 Route::delete('/commandes/{commande}', [CommandeController::class, 'destroy'])->name('commandes.destroy');
 Route::post('/commandes/vider-anciennes', [CommandeController::class, 'viderAnciennes'])->name('commandes.viderAnciennes');
+Route::get('/commandes/export', [CommandeController::class, 'export'])->name('commandes.export');
 
 Route::get('/corbeille', [CommandeController::class, 'corbeille'])->name('corbeille');
 Route::post('/corbeille/{id}/restaurer', [CommandeController::class, 'restaurer'])->name('commandes.restaurer');
