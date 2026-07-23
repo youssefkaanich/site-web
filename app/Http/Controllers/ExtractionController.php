@@ -149,7 +149,8 @@ class ExtractionController extends Controller
         return false;
     }
 
-    private static function env(): array
+    /** Variables d'environnement nécessaires pour lancer un script Python depuis PHP sur Windows. */
+    public static function env(): array
     {
         return [
             'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows',

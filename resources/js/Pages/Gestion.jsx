@@ -441,7 +441,7 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                         href="/commandes/export"
                         className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:hover:bg-gray-800"
                     >
-                        📥 Télécharger Excel
+                        📥 Exporter Excel
                     </a>
                     <button
                         onClick={openAdd}

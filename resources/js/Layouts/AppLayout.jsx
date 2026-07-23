@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 
 function NavLink({ href, label, active }) {
     return (
@@ -54,7 +54,12 @@ function BoutonModeSombre() {
 
 export default function AppLayout({ title, subtitle, children }) {
     // URL courante pour surligner le lien actif dans la sidebar
-    const { url } = usePage();
+    const { url, props } = usePage();
+    const utilisateur = props.auth?.user;
+
+    function deconnexion() {
+        router.post('/logout');
+    }
 
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors">
@@ -82,13 +87,21 @@ export default function AppLayout({ title, subtitle, children }) {
 
                     <div className="px-4 py-4 border-t border-white/10">
                         <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-full bg-white/15 flex items-center justify-center text-sm font-bold">
-                                A
+                            <div className="h-9 w-9 rounded-full bg-white/15 flex items-center justify-center text-sm font-bold shrink-0">
+                                {(utilisateur?.name || '?').charAt(0).toUpperCase()}
                             </div>
-                            <div className="text-sm">
-                                <p className="font-semibold leading-tight">Admin</p>
-                                <p className="text-xs text-blue-100/60">Administrateur</p>
+                            <div className="text-sm min-w-0 flex-1">
+                                <p className="font-semibold leading-tight truncate">{utilisateur?.name || 'Utilisateur'}</p>
+                                <p className="text-xs text-blue-100/60 truncate">{utilisateur?.email}</p>
                             </div>
+                            <button
+                                type="button"
+                                onClick={deconnexion}
+                                title="Se déconnecter"
+                                className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg text-blue-100/70 hover:bg-white/10 hover:text-white transition"
+                            >
+                                ⏻
+                            </button>
                         </div>
                     </div>
                 </aside>
