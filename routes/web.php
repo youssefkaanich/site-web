@@ -26,8 +26,8 @@ Route::middleware('auth')->group(function () {
     // Anciennes URL (avant renommage) : redirigent vers les nouvelles pour ne pas casser les favoris/liens.
     Route::redirect('/gestion', '/commandes');
     Route::post('/commandes', [CommandeController::class, 'store'])->name('commandes.store');
-    Route::put('/commandes/{commande}', [CommandeController::class, 'update'])->name('commandes.update');
-    Route::delete('/commandes/{commande}', [CommandeController::class, 'destroy'])->name('commandes.destroy');
+    Route::put('/commandes/{id}', [CommandeController::class, 'update'])->name('commandes.update');
+    Route::delete('/commandes/{id}', [CommandeController::class, 'destroy'])->name('commandes.destroy');
     Route::post('/commandes/supprimer-selection', [CommandeController::class, 'destroySelection'])->name('commandes.destroySelection');
     Route::post('/commandes/vider-anciennes', [CommandeController::class, 'viderAnciennes'])->name('commandes.viderAnciennes');
     Route::get('/commandes/export', [CommandeController::class, 'export'])->name('commandes.export');

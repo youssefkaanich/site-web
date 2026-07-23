@@ -2,22 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Commande;
+use App\Services\CommandeStore;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class CommandeController extends Controller
 {
     public function index()
     {
-        if (self::supprimerDoublons() > 0) {
-            self::renumeroterIds();
-        }
-
+        self::supprimerDoublons();
         self::vieillirStatuts();
 
         return \Inertia\Inertia::render('Gestion', [
-            'commandes' => Commande::orderByDesc('id')->get(),
+            'commandes' => CommandeStore::toutes(),
             'extraction' => ExtractionController::statut(),
         ]);
     }
@@ -26,32 +22,11 @@ class CommandeController extends Controller
      * Supprime les lignes exactement en double (même mail, même article,
      * même désignation, même quantité, même source) : ça arrive si un
      * script d'extraction traite deux fois le même mail. On garde la plus
-     * ancienne occurrence (id le plus petit). Retourne le nombre supprimé.
+     * ancienne occurrence.
      */
     private static function supprimerDoublons(): int
     {
-        return DB::delete("
-            DELETE c1 FROM commandes c1
-            INNER JOIN commandes c2
-            ON c1.Message_ID <=> c2.Message_ID
-            AND c1.Article <=> c2.Article
-            AND c1.Designation <=> c2.Designation
-            AND c1.Qte_demandee <=> c2.Qte_demandee
-            AND c1.Source <=> c2.Source
-            AND c1.id > c2.id
-            WHERE c1.deleted_at IS NULL AND c2.deleted_at IS NULL
-        ");
-    }
-
-    /**
-     * Renumérote les id de 1 à N (dans l'ordre chronologique existant),
-     * pour qu'il n'y ait jamais de trou après une suppression.
-     */
-    private static function renumeroterIds(): void
-    {
-        DB::statement('SET @n := 0');
-        DB::statement('UPDATE commandes SET id = (@n := @n + 1) ORDER BY id ASC');
-        DB::statement('ALTER TABLE commandes AUTO_INCREMENT = 1');
+        return CommandeStore::supprimerDoublons();
     }
 
     /**
@@ -62,44 +37,40 @@ class CommandeController extends Controller
     {
         $limite = now()->subDays(2);
 
-        Commande::where('statut', 'nouvelle')
-            ->whereNotNull('Date_mail')
-            ->get()
-            ->each(function (Commande $commande) use ($limite) {
-                try {
-                    $date = \Carbon\Carbon::parse($commande->Date_mail);
-                } catch (\Exception $e) {
-                    return;
-                }
+        foreach (CommandeStore::toutes() as $commande) {
+            if (($commande['statut'] ?? null) !== 'nouvelle' || empty($commande['Date_mail'])) {
+                continue;
+            }
 
-                if ($date->lt($limite)) {
-                    $commande->update(['statut' => 'ancienne']);
-                }
-            });
+            try {
+                $date = \Carbon\Carbon::parse($commande['Date_mail']);
+            } catch (\Exception $e) {
+                continue;
+            }
+
+            if ($date->lt($limite)) {
+                CommandeStore::mettreAJour($commande['id'], ['statut' => 'ancienne']);
+            }
+        }
     }
 
     public function store(Request $request)
     {
-        $data = $this->validated($request);
-
-        Commande::create($data);
+        CommandeStore::creer($this->validated($request));
 
         return redirect()->route('gestion');
     }
 
-    public function update(Request $request, Commande $commande)
+    public function update(Request $request, string $id)
     {
-        $data = $this->validated($request);
-
-        $commande->update($data);
+        CommandeStore::mettreAJour($id, $this->validated($request));
 
         return redirect()->route('gestion');
     }
 
-    public function destroy(Commande $commande)
+    public function destroy(string $id)
     {
-        $commande->forceDelete();
-        self::renumeroterIds();
+        CommandeStore::supprimerDefinitivement($id);
 
         return redirect()->route('gestion');
     }
@@ -107,10 +78,11 @@ class CommandeController extends Controller
     /** Supprime définitivement plusieurs commandes sélectionnées. */
     public function destroySelection(Request $request)
     {
-        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
 
-        Commande::whereIn('id', $ids)->forceDelete();
-        self::renumeroterIds();
+        foreach ($ids as $id) {
+            CommandeStore::supprimerDefinitivement($id);
+        }
 
         return redirect()->route('gestion');
     }
@@ -118,7 +90,11 @@ class CommandeController extends Controller
     /** Envoie à la corbeille (récupérable) toutes les commandes au statut "ancienne". */
     public function viderAnciennes()
     {
-        Commande::where('statut', 'ancienne')->delete();
+        foreach (CommandeStore::toutes() as $commande) {
+            if (($commande['statut'] ?? null) === 'ancienne') {
+                CommandeStore::envoyerCorbeille($commande['id']);
+            }
+        }
 
         return redirect()->route('gestion');
     }
@@ -127,14 +103,14 @@ class CommandeController extends Controller
     public function corbeille()
     {
         return \Inertia\Inertia::render('Corbeille', [
-            'commandes' => Commande::onlyTrashed()->orderByDesc('deleted_at')->get(),
+            'commandes' => CommandeStore::corbeille(),
         ]);
     }
 
     /** Restaure une commande depuis la corbeille. */
-    public function restaurer(int $id)
+    public function restaurer(string $id)
     {
-        Commande::onlyTrashed()->findOrFail($id)->restore();
+        CommandeStore::restaurer($id);
 
         return redirect()->route('corbeille');
     }
@@ -142,9 +118,11 @@ class CommandeController extends Controller
     /** Restaure plusieurs commandes sélectionnées dans la corbeille. */
     public function restaurerSelection(Request $request)
     {
-        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
 
-        Commande::onlyTrashed()->whereIn('id', $ids)->restore();
+        foreach ($ids as $id) {
+            CommandeStore::restaurer($id);
+        }
 
         return redirect()->route('corbeille');
     }
@@ -152,26 +130,27 @@ class CommandeController extends Controller
     /** Supprime définitivement plusieurs commandes sélectionnées dans la corbeille. */
     public function supprimerSelection(Request $request)
     {
-        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
 
-        Commande::onlyTrashed()->whereIn('id', $ids)->forceDelete();
-        self::renumeroterIds();
+        foreach ($ids as $id) {
+            CommandeStore::supprimerDefinitivement($id);
+        }
 
         return redirect()->route('corbeille');
     }
 
-    /** Tableau de bord : statistiques et graphiques calculés à partir des commandes en base. */
+    /** Tableau de bord : statistiques et graphiques calculés à partir des commandes Firestore. */
     public function analyse()
     {
-        $commandes = Commande::all(['id', 'Date_mail', 'Source', 'Article', 'Destination', 'Urgent', 'statut']);
+        $commandes = collect(CommandeStore::toutes());
 
         $parStatut = $commandes
-            ->groupBy(fn (Commande $c) => $c->statut ?: 'Inconnu')
+            ->groupBy(fn (array $c) => $c['statut'] ?? 'Inconnu')
             ->map->count()
             ->sortDesc();
 
         $parSource = $commandes
-            ->groupBy(fn (Commande $c) => $c->Source ?: 'Inconnu')
+            ->groupBy(fn (array $c) => $c['Source'] ?? 'Inconnu')
             ->map->count()
             ->sortDesc();
 
@@ -180,11 +159,11 @@ class CommandeController extends Controller
             $parJour[now()->subDays($i)->format('Y-m-d')] = 0;
         }
         foreach ($commandes as $c) {
-            if (!$c->Date_mail) {
+            if (empty($c['Date_mail'])) {
                 continue;
             }
             try {
-                $jour = \Carbon\Carbon::parse($c->Date_mail)->format('Y-m-d');
+                $jour = \Carbon\Carbon::parse($c['Date_mail'])->format('Y-m-d');
             } catch (\Exception $e) {
                 continue;
             }
@@ -194,14 +173,14 @@ class CommandeController extends Controller
         }
 
         $topArticles = $commandes
-            ->filter(fn (Commande $c) => $c->Article)
+            ->filter(fn (array $c) => !empty($c['Article']))
             ->groupBy('Article')
             ->map->count()
             ->sortDesc()
             ->take(5);
 
         $topDestinations = $commandes
-            ->filter(fn (Commande $c) => $c->Destination)
+            ->filter(fn (array $c) => !empty($c['Destination']))
             ->groupBy('Destination')
             ->map->count()
             ->sortDesc()
@@ -252,16 +231,14 @@ class CommandeController extends Controller
             ->getFont()->setBold(true);
 
         $ligne = 2;
-        Commande::orderBy('id')->chunk(200, function ($commandes) use ($feuille, $colonnes, &$ligne) {
-            foreach ($commandes as $commande) {
-                $valeurs = [];
-                foreach (array_keys($colonnes) as $champ) {
-                    $valeurs[] = $commande->{$champ};
-                }
-                $feuille->fromArray($valeurs, null, 'A'.$ligne);
-                $ligne++;
+        foreach (CommandeStore::toutes() as $commande) {
+            $valeurs = [];
+            foreach (array_keys($colonnes) as $champ) {
+                $valeurs[] = $commande[$champ] ?? null;
             }
-        });
+            $feuille->fromArray($valeurs, null, 'A'.$ligne);
+            $ligne++;
+        }
 
         foreach (range('A', \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($colonnes))) as $colonne) {
             $feuille->getColumnDimension($colonne)->setAutoSize(true);

@@ -161,6 +161,7 @@ class ExtractionController extends Controller
             'PYTHONUTF8' => '1',
             'SOPAL_APP_PASSWORD' => env('SOPAL_APP_PASSWORD'),
             'CEREBRAS_API_KEY' => env('CEREBRAS_API_KEY'),
+            'FIREBASE_CREDENTIALS' => config('firebase.credentials'),
         ];
     }
 }
