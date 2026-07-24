@@ -137,6 +137,21 @@ export default function StockProduction() {
             .finally(() => setChargement(false));
     }
 
+    function supprimerImportHistorique(id, e) {
+        e.stopPropagation();
+        if (!confirm('Supprimer cet import de l\'historique ? Cette action est irréversible.')) return;
+
+        axios
+            .delete(`/stock-production/historique/${id}`)
+            .then(() => {
+                if (id === idActif) {
+                    reinitialiser();
+                }
+                rafraichirHistorique();
+            })
+            .catch(() => setErreur("Impossible de supprimer cet import."));
+    }
+
     function reinitialiser() {
         setIdActif(null);
         setNomFichier(null);
@@ -209,6 +224,26 @@ export default function StockProduction() {
         pageCourante * LIGNES_PAR_PAGE
     );
 
+    // Navigation clavier : flèche droite = page suivante, flèche gauche =
+    // page précédente. Désactivé pendant une saisie (ex: champ de recherche)
+    // pour ne pas gêner le déplacement du curseur dans le texte.
+    useEffect(() => {
+        function surTouche(e) {
+            const cible = e.target;
+            const enSaisie = cible.tagName === 'INPUT' || cible.tagName === 'TEXTAREA' || cible.isContentEditable;
+            if (enSaisie) return;
+
+            if (e.key === 'ArrowRight') {
+                setPage((p) => Math.min(totalPages, p + 1));
+            } else if (e.key === 'ArrowLeft') {
+                setPage((p) => Math.max(1, p - 1));
+            }
+        }
+
+        window.addEventListener('keydown', surTouche);
+        return () => window.removeEventListener('keydown', surTouche);
+    }, [totalPages]);
+
     function ouvrirArticle(codeArticle) {
         if (!idActif || !codeArticle) return;
         router.visit(`/stock-production/${idActif}/articles/${encodeURIComponent(codeArticle)}`);
@@ -276,25 +311,33 @@ export default function StockProduction() {
                         {historique.map((item) => {
                             const estActif = item.id === idActif;
                             return (
-                                <button
-                                    key={item.id}
-                                    onClick={() => chargerImportHistorique(item.id)}
-                                    disabled={chargement}
-                                    title={item.nomFichier}
-                                    className={`shrink-0 text-left px-3.5 py-2.5 rounded-xl border text-xs transition-all disabled:opacity-50 ${
-                                        estActif
-                                            ? 'bg-[#0d2b52] border-[#0d2b52] text-white shadow-md shadow-[#0d2b52]/20'
-                                            : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 shadow-sm hover:shadow-md hover:-translate-y-0.5'
-                                    }`}
-                                >
-                                    <p className="font-semibold max-w-[170px] truncate flex items-center gap-1.5">
-                                        {estActif && <span>✓</span>}
-                                        {item.nomFichier}
-                                    </p>
-                                    <p className={estActif ? 'text-blue-100/70 mt-0.5' : 'text-gray-400 dark:text-gray-500 mt-0.5'}>
-                                        {formaterDate(item.horodatage)} · {item.nombreLignes} lignes
-                                    </p>
-                                </button>
+                                <div key={item.id} className="relative shrink-0 group">
+                                    <button
+                                        onClick={() => chargerImportHistorique(item.id)}
+                                        disabled={chargement}
+                                        title={item.nomFichier}
+                                        className={`text-left px-3.5 py-2.5 rounded-xl border text-xs transition-all disabled:opacity-50 ${
+                                            estActif
+                                                ? 'bg-[#0d2b52] border-[#0d2b52] text-white shadow-md shadow-[#0d2b52]/20'
+                                                : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 shadow-sm hover:shadow-md hover:-translate-y-0.5'
+                                        }`}
+                                    >
+                                        <p className="font-semibold max-w-[170px] truncate flex items-center gap-1.5">
+                                            {estActif && <span>✓</span>}
+                                            {item.nomFichier}
+                                        </p>
+                                        <p className={estActif ? 'text-blue-100/70 mt-0.5' : 'text-gray-400 dark:text-gray-500 mt-0.5'}>
+                                            {formaterDate(item.horodatage)} · {item.nombreLignes} lignes
+                                        </p>
+                                    </button>
+                                    <button
+                                        onClick={(e) => supprimerImportHistorique(item.id, e)}
+                                        title="Supprimer cet import"
+                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
                             );
                         })}
                     </div>

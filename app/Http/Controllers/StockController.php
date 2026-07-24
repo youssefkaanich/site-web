@@ -140,6 +140,20 @@ class StockController extends Controller
         ]);
     }
 
+    /** Supprime un import de l'historique. */
+    public function supprimerHistorique(string $id)
+    {
+        $chemin = $this->dossierHistorique()."/{$id}.json";
+
+        if (!file_exists($chemin)) {
+            return response()->json(['erreur' => 'Cet import n\'existe plus.'], 404);
+        }
+
+        unlink($chemin);
+
+        return response()->json(['ok' => true]);
+    }
+
     /**
      * Page de détail d'un article : cherche toutes ses lignes (= tous ses
      * emplacements) dans un import déjà sauvegardé, et les organise en

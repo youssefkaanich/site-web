@@ -9,49 +9,17 @@ class CommandeController extends Controller
 {
     public function index()
     {
-        self::supprimerDoublons();
-        self::vieillirStatuts();
+        // Un seul chargement de la liste, puis nettoyage/vieillissement en
+        // mémoire avec au plus 2 appels réseau groupés (au lieu d'un appel
+        // Firestore par ligne à chaque affichage de la page).
+        $commandes = CommandeStore::toutes();
+        $commandes = CommandeStore::nettoyerDoublons($commandes);
+        $commandes = CommandeStore::vieillirStatuts($commandes);
 
         return \Inertia\Inertia::render('Gestion', [
-            'commandes' => CommandeStore::toutes(),
+            'commandes' => $commandes,
             'extraction' => ExtractionController::statut(),
         ]);
-    }
-
-    /**
-     * Supprime les lignes exactement en double (même mail, même article,
-     * même désignation, même quantité, même source) : ça arrive si un
-     * script d'extraction traite deux fois le même mail. On garde la plus
-     * ancienne occurrence.
-     */
-    private static function supprimerDoublons(): int
-    {
-        return CommandeStore::supprimerDoublons();
-    }
-
-    /**
-     * Passe une commande de "nouvelle" à "ancienne" dès que son mail
-     * d'origine (Date_mail) a plus de 2 jours.
-     */
-    private static function vieillirStatuts(): void
-    {
-        $limite = now()->subDays(2);
-
-        foreach (CommandeStore::toutes() as $commande) {
-            if (($commande['statut'] ?? null) !== 'nouvelle' || empty($commande['Date_mail'])) {
-                continue;
-            }
-
-            try {
-                $date = \Carbon\Carbon::parse($commande['Date_mail']);
-            } catch (\Exception $e) {
-                continue;
-            }
-
-            if ($date->lt($limite)) {
-                CommandeStore::mettreAJour($commande['id'], ['statut' => 'ancienne']);
-            }
-        }
     }
 
     public function store(Request $request)
@@ -80,9 +48,7 @@ class CommandeController extends Controller
     {
         $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
 
-        foreach ($ids as $id) {
-            CommandeStore::supprimerDefinitivement($id);
-        }
+        CommandeStore::supprimerDefinitivementPlusieurs($ids);
 
         return redirect()->route('gestion');
     }
@@ -90,11 +56,12 @@ class CommandeController extends Controller
     /** Envoie à la corbeille (récupérable) toutes les commandes au statut "ancienne". */
     public function viderAnciennes()
     {
-        foreach (CommandeStore::toutes() as $commande) {
-            if (($commande['statut'] ?? null) === 'ancienne') {
-                CommandeStore::envoyerCorbeille($commande['id']);
-            }
-        }
+        $ids = collect(CommandeStore::toutes())
+            ->filter(fn (array $c) => ($c['statut'] ?? null) === 'ancienne')
+            ->pluck('id')
+            ->all();
+
+        CommandeStore::envoyerCorbeillePlusieurs($ids);
 
         return redirect()->route('gestion');
     }
@@ -120,9 +87,7 @@ class CommandeController extends Controller
     {
         $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
 
-        foreach ($ids as $id) {
-            CommandeStore::restaurer($id);
-        }
+        CommandeStore::restaurerPlusieurs($ids);
 
         return redirect()->route('corbeille');
     }
@@ -132,9 +97,7 @@ class CommandeController extends Controller
     {
         $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
 
-        foreach ($ids as $id) {
-            CommandeStore::supprimerDefinitivement($id);
-        }
+        CommandeStore::supprimerDefinitivementPlusieurs($ids);
 
         return redirect()->route('corbeille');
     }

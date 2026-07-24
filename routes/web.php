@@ -18,6 +18,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/stock-production/importer', [StockController::class, 'importer'])->name('stockProduction.importer');
     Route::get('/stock-production/historique', [StockController::class, 'historique'])->name('stockProduction.historique');
     Route::get('/stock-production/historique/{id}', [StockController::class, 'charger'])->name('stockProduction.charger');
+    Route::delete('/stock-production/historique/{id}', [StockController::class, 'supprimerHistorique'])->name('stockProduction.supprimerHistorique');
     Route::get('/stock-production/{id}/articles/{article}', [StockController::class, 'article'])
         ->where('article', '[^/]+')
         ->name('stockProduction.article');

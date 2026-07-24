@@ -252,16 +252,22 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
 
     const extractionActive = extraction.gmail || extraction.outlook;
 
-    // Revérifie souvent le statut/les commandes, mais seulement pendant qu'une extraction tourne
+    // Revérifie automatiquement les commandes (pour que les mails extraits
+    // apparaissent sans avoir à recharger la page à la main), même si
+    // l'extraction a été lancée à la main (lancer_projet.ps1) plutôt que
+    // depuis ce site. On met en pause pendant une saisie en cours (modale
+    // ouverte ou édition d'une cellule) pour ne pas la perturber.
     useEffect(() => {
-        if (!extractionActive) return;
+        const enTrainDeSaisir = showModal || celluleEdition !== null;
+        if (enTrainDeSaisir) return;
 
+        const intervalle = extractionActive ? 4000 : 8000;
         const id = setInterval(() => {
             router.reload({ only: ['commandes', 'extraction'], preserveScroll: true, preserveState: true });
-        }, 4000);
+        }, intervalle);
 
         return () => clearInterval(id);
-    }, [extractionActive]);
+    }, [extractionActive, showModal, celluleEdition]);
 
     const total = commandes.length;
     const urgentes = commandes.filter((c) => c.Urgent === 'OUI').length;
