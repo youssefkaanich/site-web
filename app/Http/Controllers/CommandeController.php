@@ -160,13 +160,14 @@ class CommandeController extends Controller
         ]);
     }
 
-    /** Télécharge toutes les commandes en vrai fichier Excel (.xlsx). */
-    public function export()
+    /** Colonnes communes à l'export et à l'import Excel (champ Firestore -> libellé affiché). */
+    private static function colonnesExcel(): array
     {
-        $colonnes = [
+        return [
             'id' => 'ID',
             'Message_ID' => 'Message ID',
             'Date_mail' => 'Date mail',
+            'Emetteur' => 'Émetteur',
             'Source' => 'Source',
             'Article' => 'Article',
             'Designation' => 'Désignation',
@@ -184,6 +185,78 @@ class CommandeController extends Controller
             'Note' => 'Note',
             'statut' => 'Statut',
         ];
+    }
+
+    /**
+     * Importe des commandes depuis un fichier Excel au même format que
+     * "Exporter Excel". Une ligne dont la colonne ID correspond à une
+     * commande existante la met à jour ; sinon une nouvelle commande est créée.
+     */
+    public function importer(Request $request)
+    {
+        $request->validate(['fichier' => 'required|file|mimes:xlsx,xls']);
+
+        $labelVersChamp = array_flip(self::colonnesExcel());
+
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($request->file('fichier')->getRealPath());
+        $lignes = $spreadsheet->getActiveSheet()->toArray(null, true, true, false);
+
+        if (empty($lignes)) {
+            return response()->json(['erreur' => 'Le fichier est vide.'], 422);
+        }
+
+        $entetes = array_map(fn ($e) => trim((string) $e), $lignes[0]);
+        $champParColonne = [];
+        foreach ($entetes as $i => $label) {
+            if (isset($labelVersChamp[$label])) {
+                $champParColonne[$i] = $labelVersChamp[$label];
+            }
+        }
+
+        if (empty($champParColonne)) {
+            return response()->json([
+                'erreur' => 'Aucune colonne reconnue. Utilise le même format que le bouton "Exporter Excel".',
+            ], 422);
+        }
+
+        $indexId = array_search('id', $champParColonne);
+        $idsExistants = collect(CommandeStore::toutes())->pluck('id')->flip();
+
+        $crees = 0;
+        $misAJour = 0;
+
+        foreach (array_slice($lignes, 1) as $ligne) {
+            if (collect($ligne)->every(fn ($v) => $v === null || $v === '')) {
+                continue; // ligne vide
+            }
+
+            $donnees = [];
+            foreach ($champParColonne as $i => $champ) {
+                if ($champ === 'id') {
+                    continue;
+                }
+                $valeur = $ligne[$i] ?? null;
+                $donnees[$champ] = ($valeur === '' ? null : $valeur);
+            }
+
+            $idBrut = $indexId !== false ? trim((string) ($ligne[$indexId] ?? '')) : '';
+
+            if ($idBrut !== '' && $idsExistants->has($idBrut)) {
+                CommandeStore::mettreAJour($idBrut, $donnees);
+                $misAJour++;
+            } else {
+                CommandeStore::creer($donnees);
+                $crees++;
+            }
+        }
+
+        return response()->json(['crees' => $crees, 'misAJour' => $misAJour]);
+    }
+
+    /** Télécharge toutes les commandes en vrai fichier Excel (.xlsx). */
+    public function export()
+    {
+        $colonnes = self::colonnesExcel();
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $feuille = $spreadsheet->getActiveSheet();
@@ -221,6 +294,7 @@ class CommandeController extends Controller
         return $request->validate([
             'Message_ID' => 'nullable|string|max:255',
             'Date_mail' => 'nullable|string|max:255',
+            'Emetteur' => 'nullable|string|max:255',
             'Source' => 'nullable|string|max:255',
             'Article' => 'nullable|string|max:255',
             'Designation' => 'nullable|string|max:255',

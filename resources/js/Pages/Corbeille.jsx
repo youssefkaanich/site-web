@@ -8,6 +8,7 @@ const COLONNES_AFFICHEES = [
     { key: 'Qte_demandee', label: 'Qté demandée' },
     { key: 'Destination', label: 'Destination' },
     { key: 'Date_mail', label: 'Date mail' },
+    { key: 'Emetteur', label: 'Émetteur' },
     { key: 'statut', label: 'Statut' },
 ];
 

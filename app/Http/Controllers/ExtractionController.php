@@ -87,26 +87,35 @@ class ExtractionController extends Controller
     /** Statut des deux extractions, utilisé par CommandeController pour l'afficher sur la page. */
     public static function statut(): array
     {
+        $journalGmail = self::lireJournal('gmail');
+        $journalOutlook = self::lireJournal('outlook');
+
         return [
             'gmail' => self::estActif('gmail'),
             'outlook' => self::estActif('outlook'),
-            'message_gmail' => self::lireMessage('gmail'),
-            'message_outlook' => self::lireMessage('outlook'),
+            'message_gmail' => end($journalGmail)['message'] ?? null,
+            'message_outlook' => end($journalOutlook)['message'] ?? null,
+            'journal_gmail' => $journalGmail,
+            'journal_outlook' => $journalOutlook,
         ];
     }
 
-    /** Dernier message d'activité écrit par le script Python (voir ecrire_statut côté Python). */
-    private static function lireMessage(string $source): ?string
+    /**
+     * Journal d'activité écrit par le script Python (voir ecrire_statut côté
+     * Python) : liste de {message, horodatage}, du plus ancien au plus
+     * récent — affiché comme un petit panneau façon console dans l'interface.
+     */
+    private static function lireJournal(string $source): array
     {
         $chemin = storage_path("app/statut_extraction/{$source}.json");
 
         if (!file_exists($chemin)) {
-            return null;
+            return [];
         }
 
         $donnees = json_decode(file_get_contents($chemin), true);
 
-        return $donnees['message'] ?? null;
+        return $donnees['lignes'] ?? [];
     }
 
     private static function estActif(string $source): bool

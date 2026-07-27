@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm, router } from '@inertiajs/react';
+import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 
@@ -7,6 +8,7 @@ const COLUMNS = [
     { key: 'id', label: 'ID', width: 60, numeric: true },
     { key: 'Message_ID', label: 'Message ID', width: 220 },
     { key: 'Date_mail', label: 'Date mail', width: 170 },
+    { key: 'Emetteur', label: 'Émetteur', width: 140 },
     { key: 'Source', label: 'Source', width: 90 },
     { key: 'Article', label: 'Article', width: 110 },
     { key: 'Designation', label: 'Désignation', width: 180 },
@@ -30,6 +32,7 @@ const ACTIONS_WIDTH = 150;
 const EMPTY_FORM = {
     Message_ID: '',
     Date_mail: '',
+    Emetteur: '',
     Source: '',
     Article: '',
     Designation: '',
@@ -216,6 +219,40 @@ function ExtractionButton({ label, colorOn, source, running, busy, setBusy }) {
     );
 }
 
+/** Petit panneau façon console : affiche le journal d'activité de l'extraction en cours. */
+function PanneauJournal({ journalGmail = [], journalOutlook = [] }) {
+    const lignes = [
+        ...journalGmail.map((l) => ({ ...l, source: 'Gmail' })),
+        ...journalOutlook.map((l) => ({ ...l, source: 'Outlook' })),
+    ].sort((a, b) => new Date(a.horodatage) - new Date(b.horodatage));
+
+    const finRef = useRef(null);
+    useEffect(() => {
+        finRef.current?.scrollIntoView({ block: 'end' });
+    }, [lignes.length]);
+
+    if (lignes.length === 0) return null;
+
+    return (
+        <div className="mb-6 bg-gray-900 dark:bg-black rounded-xl shadow-inner overflow-hidden">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-4 pt-3 pb-1">
+                🖥️ Mails en cours d'extraction
+            </p>
+            <div className="px-4 pb-3 max-h-52 overflow-y-auto font-mono text-xs leading-relaxed">
+                {lignes.map((l, i) => (
+                    <p key={i} className="text-green-400/90 whitespace-pre-wrap break-words">
+                        <span className="text-gray-500">
+                            [{new Date(l.horodatage).toLocaleTimeString('fr-FR')} · {l.source}]
+                        </span>{' '}
+                        {l.message}
+                    </p>
+                ))}
+                <div ref={finRef} />
+            </div>
+        </div>
+    );
+}
+
 export default function Gestion({ commandes = [], extraction = { gmail: false, outlook: false } }) {
     const [modalCommande, setModalCommande] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -227,6 +264,32 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
     const [celluleEdition, setCelluleEdition] = useState(null); // { id, col } | null
     const [valeurEdition, setValeurEdition] = useState('');
     const [selection, setSelection] = useState([]); // liste des id cochés
+    const [importEnCours, setImportEnCours] = useState(false);
+    const inputImportRef = useRef(null);
+
+    function importerFichier(e) {
+        const fichier = e.target.files[0];
+        e.target.value = ''; // permet de réimporter le même fichier ensuite
+        if (!fichier) return;
+
+        setImportEnCours(true);
+        const donnees = new FormData();
+        donnees.append('fichier', fichier);
+
+        axios
+            .post('/commandes/importer', donnees)
+            .then(({ data }) => {
+                alert(`Import terminé : ${data.crees} commande(s) créée(s), ${data.misAJour} mise(s) à jour.`);
+                router.reload({ only: ['commandes'] });
+            })
+            .catch((err) => {
+                alert(
+                    err.response?.data?.erreur ||
+                        "Impossible d'importer ce fichier. Vérifie que c'est bien un export Excel de cette page."
+                );
+            })
+            .finally(() => setImportEnCours(false));
+    }
 
     function demarrerEdition(c, col) {
         if (col === 'id') return;
@@ -371,6 +434,13 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                 )}
             </div>
 
+            {extractionActive && (
+                <PanneauJournal
+                    journalGmail={extraction.journal_gmail || []}
+                    journalOutlook={extraction.journal_outlook || []}
+                />
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
                 <StatCard
                     label="Commandes"
@@ -449,6 +519,21 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
                     >
                         📥 Exporter Excel
                     </a>
+                    <input
+                        ref={inputImportRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={importerFichier}
+                        className="hidden"
+                    />
+                    <button
+                        onClick={() => inputImportRef.current?.click()}
+                        disabled={importEnCours}
+                        title='Fichier au même format que "Exporter Excel"'
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50"
+                    >
+                        {importEnCours ? '⏳ Import en cours…' : '📤 Importer Excel'}
+                    </button>
                     <button
                         onClick={openAdd}
                         className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90"
