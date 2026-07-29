@@ -1,6 +1,11 @@
+
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
+import ConfirmDialog from '../Components/ConfirmDialog';
+import BadgeJob from '../Components/BadgeJob';
+import { IconRestore, IconTrash } from '../Components/Icons';
+import { toast } from '../hooks/toast';
 
 const COLONNES_AFFICHEES = [
     { key: 'Article', label: 'Article' },
@@ -9,11 +14,13 @@ const COLONNES_AFFICHEES = [
     { key: 'Destination', label: 'Destination' },
     { key: 'Date_mail', label: 'Date mail' },
     { key: 'Emetteur', label: 'Émetteur' },
+    { key: 'Job', label: 'Job' },
     { key: 'statut', label: 'Statut' },
 ];
 
 export default function Corbeille({ commandes = [] }) {
     const [selection, setSelection] = useState([]); // liste des id cochés
+    const [confirmation, setConfirmation] = useState(null); // { message, onConfirm } | null
 
     const touteSelectionnee = commandes.length > 0 && selection.length === commandes.length;
 
@@ -26,29 +33,44 @@ export default function Corbeille({ commandes = [] }) {
     }
 
     function restaurer(c) {
-        router.post(`/corbeille/${c.id}/restaurer`, {}, { preserveScroll: true });
+        router.post(`/corbeille/${c.id}/restaurer`, {}, {
+            preserveScroll: true,
+            onSuccess: () => toast('Commande restaurée.'),
+        });
     }
 
     function restaurerSelection() {
         router.post(
             '/corbeille/restaurer-selection',
             { ids: selection },
-            { preserveScroll: true, onSuccess: () => setSelection([]) }
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSelection([]);
+                    toast('Commande(s) restaurée(s).');
+                },
+            }
         );
     }
 
     function supprimerSelection() {
-        if (
-            confirm(
-                `Supprimer définitivement ${selection.length} commande(s) ? Cette action est irréversible.`
-            )
-        ) {
-            router.post(
-                '/corbeille/supprimer-selection',
-                { ids: selection },
-                { preserveScroll: true, onSuccess: () => setSelection([]) }
-            );
-        }
+        setConfirmation({
+            message: `Supprimer définitivement ${selection.length} commande(s) ? Cette action est irréversible.`,
+            onConfirm: () => {
+                setConfirmation(null);
+                router.post(
+                    '/corbeille/supprimer-selection',
+                    { ids: selection },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            setSelection([]);
+                            toast('Commande(s) supprimée(s) définitivement.');
+                        },
+                    }
+                );
+            },
+        });
     }
 
     return (
@@ -64,15 +86,15 @@ export default function Corbeille({ commandes = [] }) {
                     <div className="flex gap-2">
                         <button
                             onClick={restaurerSelection}
-                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/30 dark:hover:bg-green-900/50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/30 dark:hover:bg-green-900/50"
                         >
-                            ♻️ Restaurer la sélection
+                            <IconRestore className="h-3.5 w-3.5" /> Restaurer la sélection
                         </button>
                         <button
                             onClick={supprimerSelection}
-                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/30 dark:hover:bg-red-900/50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/30 dark:hover:bg-red-900/50"
                         >
-                            🗑️ Supprimer définitivement
+                            <IconTrash className="h-3.5 w-3.5" /> Supprimer définitivement
                         </button>
                     </div>
                 </div>
@@ -116,15 +138,19 @@ export default function Corbeille({ commandes = [] }) {
                                 </td>
                                 {COLONNES_AFFICHEES.map((col) => (
                                     <td key={col.key} className="px-4 py-3">
-                                        {c[col.key] ?? '—'}
+                                        {col.key === 'Job' ? (
+                                            c.Job ? <BadgeJob job={c.Job} /> : '—'
+                                        ) : (
+                                            c[col.key] ?? '—'
+                                        )}
                                     </td>
                                 ))}
                                 <td className="px-4 py-3">
                                     <button
                                         onClick={() => restaurer(c)}
-                                        className="px-2.5 py-1 rounded-md text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/30 dark:hover:bg-green-900/50"
+                                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/30 dark:hover:bg-green-900/50"
                                     >
-                                        ♻️ Restaurer
+                                        <IconRestore className="h-3.5 w-3.5" /> Restaurer
                                     </button>
                                 </td>
                             </tr>
@@ -142,6 +168,13 @@ export default function Corbeille({ commandes = [] }) {
                     </tbody>
                 </table>
             </div>
+            <ConfirmDialog
+                open={Boolean(confirmation)}
+                message={confirmation?.message}
+                danger
+                onConfirm={confirmation?.onConfirm}
+                onCancel={() => setConfirmation(null)}
+            />
         </AppLayout>
     );
 }

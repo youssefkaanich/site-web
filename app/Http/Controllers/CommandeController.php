@@ -4,21 +4,45 @@ namespace App\Http\Controllers;
 
 use App\Services\CommandeStore;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CommandeController extends Controller
 {
-    public function index()
+    /**
+     * $service (injecté via Route::defaults, voir routes/web.php) : null pour
+     * la vue globale (/commandes), "Export" ou "Commercial" pour les
+     * sous-pages dédiées (/commandes/export, /commandes/commercial) — même
+     * action, réutilisée pour les 3 routes, filtrée par la colonne `Job`.
+     */
+    public function index(?string $service = null)
     {
-        // Un seul chargement de la liste, puis nettoyage/vieillissement en
-        // mémoire avec au plus 2 appels réseau groupés (au lieu d'un appel
-        // Firestore par ligne à chaque affichage de la page).
         $commandes = CommandeStore::toutes();
-        $commandes = CommandeStore::nettoyerDoublons($commandes);
-        $commandes = CommandeStore::vieillirStatuts($commandes);
+
+        // La page se recharge automatiquement toutes les 15-30s (voir
+        // Gestion.jsx) : refaire le nettoyage des doublons + le vieillissement
+        // des statuts à CHAQUE rechargement scanne toute la table pour rien
+        // la plupart du temps. Cache::add ne pose le verrou que s'il n'existe
+        // pas déjà -> ce bloc ne tourne donc plus qu'une fois par minute max,
+        // quel que soit le nombre de rechargements entre-temps.
+        if (Cache::add('commandes:verrou_nettoyage', true, 60)) {
+            $commandes = CommandeStore::nettoyerDoublons($commandes);
+            $commandes = CommandeStore::vieillirStatuts($commandes);
+        }
+
+        // Filtre par service AVANT l'envoi à React (pas juste côté front) :
+        // même colonne `Job` que le filtre à onglets Export/Commercial déjà
+        // en place, remplie à l'extraction (voir categorie_job() côté Python).
+        if ($service !== null) {
+            $commandes = array_values(array_filter(
+                $commandes,
+                fn (array $c) => ($c['Job'] ?? null) === $service
+            ));
+        }
 
         return \Inertia\Inertia::render('Gestion', [
             'commandes' => $commandes,
             'extraction' => ExtractionController::statut(),
+            'service' => $service,
         ]);
     }
 
@@ -46,7 +70,7 @@ class CommandeController extends Controller
     /** Supprime définitivement plusieurs commandes sélectionnées. */
     public function destroySelection(Request $request)
     {
-        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
 
         CommandeStore::supprimerDefinitivementPlusieurs($ids);
 
@@ -85,7 +109,7 @@ class CommandeController extends Controller
     /** Restaure plusieurs commandes sélectionnées dans la corbeille. */
     public function restaurerSelection(Request $request)
     {
-        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
 
         CommandeStore::restaurerPlusieurs($ids);
 
@@ -95,7 +119,7 @@ class CommandeController extends Controller
     /** Supprime définitivement plusieurs commandes sélectionnées dans la corbeille. */
     public function supprimerSelection(Request $request)
     {
-        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'string'])['ids'];
+        $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
 
         CommandeStore::supprimerDefinitivementPlusieurs($ids);
 
@@ -168,6 +192,7 @@ class CommandeController extends Controller
             'Message_ID' => 'Message ID',
             'Date_mail' => 'Date mail',
             'Emetteur' => 'Émetteur',
+            'Job' => 'Job',
             'Source' => 'Source',
             'Article' => 'Article',
             'Designation' => 'Désignation',
@@ -295,6 +320,7 @@ class CommandeController extends Controller
             'Message_ID' => 'nullable|string|max:255',
             'Date_mail' => 'nullable|string|max:255',
             'Emetteur' => 'nullable|string|max:255',
+            'Job' => 'nullable|string|max:255',
             'Source' => 'nullable|string|max:255',
             'Article' => 'nullable|string|max:255',
             'Designation' => 'nullable|string|max:255',

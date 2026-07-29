@@ -2,6 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { router } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
+import {
+    IconFolder,
+    IconFile,
+    IconCheck,
+    IconAlertTriangle,
+    IconClock,
+    IconSearch,
+    IconBarChart,
+    IconChevronLeft,
+    IconChevronRight,
+} from '../Components/Icons';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 import { trouverColonne } from '../utils/colonnesStock';
 
@@ -277,7 +288,9 @@ export default function StockProduction() {
                             Traitement en cours…
                         </>
                     ) : (
-                        <>📂 Importer un fichier Excel</>
+                        <>
+                            <IconFolder className="h-4 w-4" /> Importer un fichier Excel
+                        </>
                     )}
                     <input
                         type="file"
@@ -289,8 +302,8 @@ export default function StockProduction() {
                 </label>
                 {nomFichier && (
                     <>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 rounded-xl shadow-sm">
-                            📄 {nomFichier}
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 rounded-xl shadow-sm">
+                            <IconFile className="h-4 w-4" /> {nomFichier}
                         </span>
                         <button
                             onClick={reinitialiser}
@@ -304,8 +317,8 @@ export default function StockProduction() {
 
             {historique.length > 0 && (
                 <div className="mb-6">
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2.5 uppercase tracking-wide">
-                        📁 Historique des imports · {historique.length}/10
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2.5 uppercase tracking-wide">
+                        <IconFolder className="h-3.5 w-3.5" /> Historique des imports · {historique.length}/10
                     </p>
                     <div className="flex gap-2.5 overflow-x-auto pb-1">
                         {historique.map((item) => {
@@ -323,7 +336,7 @@ export default function StockProduction() {
                                         }`}
                                     >
                                         <p className="font-semibold max-w-[170px] truncate flex items-center gap-1.5">
-                                            {estActif && <span>✓</span>}
+                                            {estActif && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
                                             {item.nomFichier}
                                         </p>
                                         <p className={estActif ? 'text-blue-100/70 mt-0.5' : 'text-gray-400 dark:text-gray-500 mt-0.5'}>
@@ -345,8 +358,8 @@ export default function StockProduction() {
             )}
 
             {erreur && (
-                <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 text-red-700 dark:text-red-400 text-sm font-semibold px-4 py-3 rounded-xl">
-                    ⚠️ {erreur}
+                <div className="flex items-center gap-2 mb-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 text-red-700 dark:text-red-400 text-sm font-semibold px-4 py-3 rounded-xl">
+                    <IconAlertTriangle className="h-4 w-4 shrink-0" /> {erreur}
                 </div>
             )}
 
@@ -361,7 +374,9 @@ export default function StockProduction() {
                         <p className="text-4xl font-extrabold mt-2 text-[#0d2b52] dark:text-white">{colonnes.length}</p>
                     </div>
                     <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm">
-                        <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">🕒 Date du stock</p>
+                        <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                            <IconClock className="h-4 w-4" /> Date du stock
+                        </p>
                         <p className="text-lg font-extrabold mt-3 text-[#0d2b52] dark:text-white leading-snug">
                             {titreStock || '—'}
                         </p>
@@ -372,8 +387,8 @@ export default function StockProduction() {
             {nomFichier && (
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div className="relative w-full sm:w-72">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm pointer-events-none">
-                            🔎
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
+                            <IconSearch className="h-4 w-4" />
                         </span>
                         <input
                             type="text"
@@ -401,7 +416,7 @@ export default function StockProduction() {
 
             {!nomFichier && !erreur && (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-dashed border-gray-300 dark:border-gray-700 px-4 py-20 text-center">
-                    <p className="text-4xl mb-3">📊</p>
+                    <IconBarChart className="h-10 w-10 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
                     <p className="text-gray-500 dark:text-gray-400 font-semibold">Importe un fichier Excel pour voir son contenu ici.</p>
                     <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
                         Les colonnes et lignes inutiles sont filtrées automatiquement.
@@ -411,7 +426,9 @@ export default function StockProduction() {
 
             {nomFichier && (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* max-h + overflow-auto : le scroll horizontal reste toujours accessible
+                        sans devoir faire défiler toute la page (même correctif que Gestion.jsx). */}
+                    <div className="overflow-auto max-h-[65vh]">
                         <table className="w-full text-sm table-fixed border-collapse">
                             <colgroup>
                                 {colonnesAffichees.map((col) => (
@@ -485,9 +502,9 @@ export default function StockProduction() {
                             <button
                                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                                 disabled={pageCourante === 1}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 transition"
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 transition"
                             >
-                                ← Précédent
+                                <IconChevronLeft className="h-3.5 w-3.5" /> Précédent
                             </button>
                             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                                 Page {pageCourante} / {totalPages}
@@ -495,9 +512,9 @@ export default function StockProduction() {
                             <button
                                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={pageCourante === totalPages}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 transition"
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 transition"
                             >
-                                Suivant →
+                                Suivant <IconChevronRight className="h-3.5 w-3.5" />
                             </button>
                         </div>
                     )}

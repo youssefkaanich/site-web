@@ -44,14 +44,18 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
+        // Connexion dédiée aux commandes (table `commandes`, base XAMPP) : des
+        // clés d'env séparées (SOPAL_DB_*) pour ne pas entrer en conflit avec
+        // DB_DATABASE/DB_HOST... utilisés par la connexion "sqlite" par défaut
+        // (users/sessions/cache du site).
         'mysql' => [
             'driver' => 'mysql',
-            'url' => env('DB_URL'),
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '3306'),
-            'database' => env('DB_DATABASE', 'laravel'),
-            'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            'url' => env('SOPAL_DB_URL'),
+            'host' => env('SOPAL_DB_HOST', '127.0.0.1'),
+            'port' => env('SOPAL_DB_PORT', '3306'),
+            'database' => env('SOPAL_DB_DATABASE', 'sopal'),
+            'username' => env('SOPAL_DB_USERNAME', 'root'),
+            'password' => env('SOPAL_DB_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),

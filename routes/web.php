@@ -14,6 +14,8 @@ Route::post('/logout', [AuthController::class, 'destroy'])->name('logout')->midd
 
 Route::middleware('auth')->group(function () {
     Route::get('/commandes', [CommandeController::class, 'index'])->name('gestion');
+    Route::get('/commandes/export', [CommandeController::class, 'index'])->name('gestion.export')->defaults('service', 'Export');
+    Route::get('/commandes/commercial', [CommandeController::class, 'index'])->name('gestion.commercial')->defaults('service', 'Commercial');
     Route::get('/stock-production', [StockController::class, 'page'])->name('stockProduction');
     Route::post('/stock-production/importer', [StockController::class, 'importer'])->name('stockProduction.importer');
     Route::get('/stock-production/historique', [StockController::class, 'historique'])->name('stockProduction.historique');
@@ -32,7 +34,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/commandes/{id}', [CommandeController::class, 'destroy'])->name('commandes.destroy');
     Route::post('/commandes/supprimer-selection', [CommandeController::class, 'destroySelection'])->name('commandes.destroySelection');
     Route::post('/commandes/vider-anciennes', [CommandeController::class, 'viderAnciennes'])->name('commandes.viderAnciennes');
-    Route::get('/commandes/export', [CommandeController::class, 'export'])->name('commandes.export');
+    // Renommé (pas "/commandes/export" : ça désigne maintenant la vue "service Export", voir plus haut).
+    Route::get('/commandes/exporter-excel', [CommandeController::class, 'export'])->name('commandes.export');
 
     Route::get('/corbeille', [CommandeController::class, 'corbeille'])->name('corbeille');
     Route::post('/corbeille/{id}/restaurer', [CommandeController::class, 'restaurer'])->name('commandes.restaurer');

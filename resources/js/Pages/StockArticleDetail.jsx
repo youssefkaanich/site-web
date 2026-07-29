@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
+import { IconChevronLeft, IconInbox } from '../Components/Icons';
 import { trouverColonne } from '../utils/colonnesStock';
 
 const ONGLETS = [
@@ -38,7 +39,7 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
                 href={`/stock-production?import=${idImport}`}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0d2b52] dark:text-blue-300 hover:underline mb-5"
             >
-                ← Retour à Stock / Production
+                <IconChevronLeft className="h-4 w-4" /> Retour à Stock / Production
             </Link>
 
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-5 mb-6">
@@ -149,7 +150,7 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
             {/* Onglet : Commandes liées (vide, pour plus tard) */}
             {ongletActif === 'commandes' && (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-dashed border-gray-300 dark:border-gray-700 px-4 py-16 text-center">
-                    <p className="text-4xl mb-3">🧾</p>
+                    <IconInbox className="h-10 w-10 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
                     <p className="text-gray-500 dark:text-gray-400 font-semibold">Pas encore de commandes liées à cet article.</p>
                     <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">Cette section sera complétée plus tard.</p>
                 </div>

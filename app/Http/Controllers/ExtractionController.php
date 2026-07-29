@@ -27,7 +27,7 @@ class ExtractionController extends Controller
             return back();
         }
 
-        $pid = self::lancerCache(self::SCRIPTS[$source]);
+        $pid = self::lancerCache($source, self::SCRIPTS[$source]);
 
         Cache::forever("extraction:{$source}:pid", $pid);
         Cache::forever("extraction:{$source}:demarre_a", time());
@@ -40,13 +40,25 @@ class ExtractionController extends Controller
      * Lance le script Python complètement détaché (via PowerShell Start-Process),
      * sans fenêtre visible et sans dépendre du processus PHP qui l'a démarré.
      * Retourne le PID réel de python.exe.
+     *
+     * La sortie standard ET les erreurs (tracebacks Python en cas de plantage)
+     * sont redirigées vers storage/logs/extraction_{source}.log : sans ça,
+     * un script qui plante en silence (fenêtre cachée) ne laisse AUCUNE trace
+     * exploitable pour comprendre pourquoi l'extraction s'est arrêtée toute seule.
      */
-    private static function lancerCache(string $script): int
+    private static function lancerCache(string $source, string $script): int
     {
+        // Start-Process refuse de rediriger stdout et stderr vers le MÊME fichier,
+        // d'où deux fichiers séparés (le traceback d'un plantage sort sur stderr).
+        $sortiePath = storage_path("logs/extraction_{$source}.out.log");
+        $erreurPath = storage_path("logs/extraction_{$source}.err.log");
+
         $commandePs = sprintf(
-            '$p = Start-Process -FilePath python -ArgumentList %s -WorkingDirectory %s -WindowStyle Hidden -PassThru; $p.Id',
+            '$p = Start-Process -FilePath python -ArgumentList %s -WorkingDirectory %s -WindowStyle Hidden -RedirectStandardOutput %s -RedirectStandardError %s -PassThru; $p.Id',
             self::psQuote($script),
-            self::psQuote(self::DOSSIER_PYTHON)
+            self::psQuote(self::DOSSIER_PYTHON),
+            self::psQuote($sortiePath),
+            self::psQuote($erreurPath)
         );
 
         $result = Process::env(self::env())
@@ -170,7 +182,11 @@ class ExtractionController extends Controller
             'PYTHONUTF8' => '1',
             'SOPAL_APP_PASSWORD' => env('SOPAL_APP_PASSWORD'),
             'CEREBRAS_API_KEY' => env('CEREBRAS_API_KEY'),
-            'FIREBASE_CREDENTIALS' => config('firebase.credentials'),
+            'SOPAL_DB_HOST' => config('database.connections.mysql.host'),
+            'SOPAL_DB_PORT' => (string) config('database.connections.mysql.port'),
+            'SOPAL_DB_NAME' => config('database.connections.mysql.database'),
+            'SOPAL_DB_USER' => config('database.connections.mysql.username'),
+            'SOPAL_DB_PASSWORD' => config('database.connections.mysql.password'),
         ];
     }
 }

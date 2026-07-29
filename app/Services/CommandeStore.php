@@ -2,412 +2,189 @@
 
 namespace App\Services;
 
-use Google\Auth\Credentials\ServiceAccountCredentials;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\ClientException;
-use Illuminate\Support\Facades\Cache;
+use App\Models\Commande;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Accès à la collection Firestore "commandes", en remplacement de l'ancien
- * modèle Eloquent Commande (MySQL). Un document Firestore = une commande.
+ * Accès aux commandes, stockées dans la table MySQL `commandes` (base
+ * "sopal", XAMPP) via le modèle Eloquent Commande — remplace l'ancienne
+ * version Firestore (abandonnée : le quota gratuit Google était trop vite
+ * dépassé avec le rafraîchissement automatique de la page Gestion).
  *
- * Utilise directement l'API REST de Firestore (pas le SDK google/cloud-firestore,
- * qui exige l'extension PHP "grpc" — indisponible sur ce PC Windows/XAMPP).
- * L'authentification se fait via google/auth (dépendance de kreait/firebase-php)
- * avec la clé de service Firebase.
- *
- * Différences avec l'ancien système MySQL :
- * - l'id reste un nombre entier séquentiel (1, 2, 3...), mais généré via un
- *   compteur Firestore (document "_compteurs/commandes") au lieu d'un
- *   AUTO_INCREMENT SQL — Firestore n'a pas d'équivalent natif ;
- * - il n'y a pas de vraie corbeille (soft delete) : on simule ça avec un
- *   champ booléen "supprime" sur le document ;
- * - le tri "plus récent d'abord" se fait sur le champ "cree_le" (rempli à
- *   la création, par ce service ou par le script Python), pas sur l'id ;
- * - le filtrage se fait côté PHP après avoir tout récupéré (pas de requête
- *   Firestore complexe) : largement suffisant vu le volume de cette appli.
- *
- * Pour la rapidité : le jeton d'authentification Google est mis en cache
- * (sinon chaque requête HTTP referait un aller-retour d'authentification
- * avant même de parler à Firestore), et les écritures groupables (nettoyage
- * des doublons, vieillissement des statuts) partent en UN SEUL appel
- * ("commit" avec plusieurs écritures) au lieu d'un appel par ligne.
+ * Garde volontairement la même API statique que l'ancienne version
+ * Firestore (toutes(), creer(), mettreAJour()...) pour que
+ * CommandeController.php n'ait presque rien à changer.
  */
 class CommandeStore
 {
-    private const COLLECTION = 'commandes';
-    private const SCOPE = 'https://www.googleapis.com/auth/datastore';
+    private const CONNEXION = 'mysql';
 
-    private static ?Client $http = null;
-    private static ?string $projectId = null;
-
-    private static function projectId(): string
-    {
-        if (self::$projectId === null) {
-            $donnees = json_decode(file_get_contents(config('firebase.credentials')), true);
-            self::$projectId = $donnees['project_id'];
-        }
-
-        return self::$projectId;
-    }
-
-    private static function baseUrl(): string
-    {
-        return 'https://firestore.googleapis.com/v1/projects/'.self::projectId().'/databases/(default)/documents';
-    }
-
-    private static function nomDocument(string $id): string
-    {
-        return 'projects/'.self::projectId().'/databases/(default)/documents/'.self::COLLECTION.'/'.$id;
-    }
-
-    /** Jeton d'accès Google mis en cache (durée de vie ~1h) pour éviter de
-     * ré-authentifier auprès de Google à chaque requête du site. */
-    private static function jetonAcces(): string
-    {
-        return Cache::remember('firebase_access_token', 3000, function () {
-            $credentials = new ServiceAccountCredentials(self::SCOPE, config('firebase.credentials'));
-            $jeton = $credentials->fetchAuthToken();
-
-            return $jeton['access_token'];
-        });
-    }
-
-    private static function http(): Client
-    {
-        if (self::$http === null) {
-            self::$http = new Client(['headers' => ['Authorization' => 'Bearer '.self::jetonAcces()]]);
-        }
-
-        return self::$http;
-    }
-
-    /** Si le jeton mis en cache a expiré côté Google, on le régénère une fois et on réessaie. */
-    private static function avecReessai(callable $requete)
-    {
-        try {
-            return $requete();
-        } catch (ClientException $e) {
-            if ($e->getResponse()->getStatusCode() === 401) {
-                Cache::forget('firebase_access_token');
-                self::$http = null;
-
-                return $requete();
-            }
-            throw $e;
-        }
-    }
-
-    // ---------- Conversion PHP <-> format typé Firestore ----------
-
-    private static function versValeurFirestore(mixed $valeur): array
-    {
-        if ($valeur === null) {
-            return ['nullValue' => null];
-        }
-        if (is_bool($valeur)) {
-            return ['booleanValue' => $valeur];
-        }
-        if (is_int($valeur)) {
-            return ['integerValue' => (string) $valeur];
-        }
-        if (is_float($valeur)) {
-            return ['doubleValue' => $valeur];
-        }
-
-        return ['stringValue' => (string) $valeur];
-    }
-
-    private static function depuisValeurFirestore(array $valeur): mixed
-    {
-        return match (true) {
-            array_key_exists('nullValue', $valeur) => null,
-            array_key_exists('booleanValue', $valeur) => $valeur['booleanValue'],
-            array_key_exists('integerValue', $valeur) => (int) $valeur['integerValue'],
-            array_key_exists('doubleValue', $valeur) => (float) $valeur['doubleValue'],
-            array_key_exists('stringValue', $valeur) => $valeur['stringValue'],
-            array_key_exists('timestampValue', $valeur) => $valeur['timestampValue'],
-            default => null,
-        };
-    }
-
-    private static function versChampsFirestore(array $data): array
-    {
-        $champs = [];
-        foreach ($data as $cle => $valeur) {
-            $champs[$cle] = self::versValeurFirestore($valeur);
-        }
-
-        return $champs;
-    }
-
-    private static function documentVersTableau(array $document): array
-    {
-        $ligne = ['id' => basename($document['name'])];
-        foreach ($document['fields'] ?? [] as $cle => $valeur) {
-            $ligne[$cle] = self::depuisValeurFirestore($valeur);
-        }
-
-        return $ligne;
-    }
+    /** Fichier de suivi des mails déjà traités par les scripts Python (voir extract_gmail_commandes.py). */
+    private const FICHIER_TRAITES = 'C:\\STAGE\\projet sopal\\traites_ids.txt';
 
     // ---------- Lecture ----------
 
-    /** Récupère TOUS les documents de la collection (pagination interne), non transformés. */
-    private static function tousLesDocuments(): array
-    {
-        return self::avecReessai(function () {
-            $documents = [];
-            $jeton = null;
-
-            do {
-                $reponse = self::http()->get(self::baseUrl().'/'.self::COLLECTION, [
-                    'query' => array_filter(['pageSize' => 300, 'pageToken' => $jeton]),
-                ]);
-                $donnees = json_decode((string) $reponse->getBody(), true);
-
-                foreach ($donnees['documents'] ?? [] as $document) {
-                    $documents[] = self::documentVersTableau($document);
-                }
-
-                $jeton = $donnees['nextPageToken'] ?? null;
-            } while ($jeton);
-
-            return $documents;
-        });
-    }
-
-    /** @return array<int, array> Commandes non supprimées, les plus récentes d'abord. */
+    /** @return array<int, array> Commandes non supprimées, l'id le plus grand (la plus récente) en premier. */
     public static function toutes(): array
     {
-        $lignes = array_values(array_filter(
-            self::tousLesDocuments(),
-            fn (array $c) => ($c['supprime'] ?? false) === false
-        ));
-
-        usort($lignes, fn ($a, $b) => strcmp((string) ($b['cree_le'] ?? ''), (string) ($a['cree_le'] ?? '')));
-
-        return $lignes;
+        return Commande::orderByDesc('id')->get()->toArray();
     }
 
     /** @return array<int, array> Commandes envoyées à la corbeille, les plus récemment supprimées d'abord. */
     public static function corbeille(): array
     {
-        $lignes = array_values(array_filter(
-            self::tousLesDocuments(),
-            fn (array $c) => ($c['supprime'] ?? false) === true
-        ));
-
-        usort($lignes, fn ($a, $b) => strcmp((string) ($b['supprime_le'] ?? ''), (string) ($a['supprime_le'] ?? '')));
-
-        return $lignes;
+        return Commande::onlyTrashed()
+            ->orderByDesc('deleted_at')
+            ->orderByDesc('id')
+            ->get()
+            ->toArray();
     }
 
     public static function trouver(string $id): ?array
     {
-        try {
-            $reponse = self::avecReessai(fn () => self::http()->get(self::baseUrl().'/'.self::COLLECTION.'/'.$id));
-        } catch (ClientException $e) {
-            if ($e->getResponse()->getStatusCode() === 404) {
-                return null;
-            }
-            throw $e;
-        }
+        $commande = Commande::withTrashed()->find($id);
 
-        return self::documentVersTableau(json_decode((string) $reponse->getBody(), true));
+        return $commande?->toArray();
     }
 
     // ---------- Écriture ----------
 
-    /** Numéro entier séquentiel suivant, via un compteur dédié (équivalent de l'AUTO_INCREMENT SQL). */
-    private static function prochainId(): int
-    {
-        $urlCompteur = self::baseUrl().'/_compteurs/commandes';
-
-        $valeur = self::avecReessai(function () use ($urlCompteur) {
-            try {
-                $reponse = self::http()->get($urlCompteur);
-                $donnees = json_decode((string) $reponse->getBody(), true);
-
-                return self::depuisValeurFirestore($donnees['fields']['valeur'] ?? ['integerValue' => '0']);
-            } catch (ClientException $e) {
-                if ($e->getResponse()->getStatusCode() !== 404) {
-                    throw $e;
-                }
-
-                return 0;
-            }
-        });
-
-        $nouvelleValeur = ((int) $valeur) + 1;
-
-        // PATCH sur Firestore crée le document s'il n'existe pas encore (upsert).
-        self::avecReessai(fn () => self::http()->patch($urlCompteur.'?updateMask.fieldPaths=valeur', [
-            'json' => ['fields' => ['valeur' => self::versValeurFirestore($nouvelleValeur)]],
-        ]));
-
-        return $nouvelleValeur;
-    }
-
     public static function creer(array $data): string
     {
-        $id = (string) self::prochainId();
-
         $data['statut'] = $data['statut'] ?? 'nouvelle';
-        $data['supprime'] = false;
-        $data['supprime_le'] = null;
-        $data['cree_le'] = now()->toIso8601String();
 
-        self::avecReessai(fn () => self::http()->patch(self::baseUrl().'/'.self::COLLECTION.'/'.$id, [
-            'json' => ['fields' => self::versChampsFirestore($data)],
-        ]));
-
-        return $id;
+        return (string) Commande::create($data)->id;
     }
 
     public static function mettreAJour(string $id, array $data): void
     {
-        self::ecrireLots([self::ecritureMiseAJour($id, $data)]);
+        Commande::withTrashed()->where('id', $id)->update($data);
     }
 
     public static function supprimerDefinitivement(string $id): void
     {
-        self::avecReessai(function () use ($id) {
-            try {
-                self::http()->delete(self::baseUrl().'/'.self::COLLECTION.'/'.$id);
-            } catch (ClientException $e) {
-                if ($e->getResponse()->getStatusCode() !== 404) {
-                    throw $e;
-                }
-            }
-        });
+        $messageId = Commande::withTrashed()->where('id', $id)->value('Message_ID');
+
+        Commande::withTrashed()->where('id', $id)->forceDelete();
+        self::renumeroterIds();
+        self::oublierMessageIds([$messageId]);
     }
 
     public static function envoyerCorbeille(string $id): void
     {
-        self::mettreAJour($id, ['supprime' => true, 'supprime_le' => now()->toIso8601String()]);
+        Commande::where('id', $id)->delete();
     }
 
     public static function restaurer(string $id): void
     {
-        self::mettreAJour($id, ['supprime' => false, 'supprime_le' => null]);
+        Commande::onlyTrashed()->where('id', $id)->restore();
     }
 
     /** @param string[] $ids */
     public static function supprimerDefinitivementPlusieurs(array $ids): void
     {
-        self::ecrireLots(array_map(fn ($id) => self::ecritureSuppression($id), $ids));
+        $messageIds = Commande::withTrashed()->whereIn('id', $ids)->pluck('Message_ID')->all();
+
+        Commande::withTrashed()->whereIn('id', $ids)->forceDelete();
+        self::renumeroterIds();
+        self::oublierMessageIds($messageIds);
     }
 
     /** @param string[] $ids */
     public static function restaurerPlusieurs(array $ids): void
     {
-        $data = ['supprime' => false, 'supprime_le' => null];
-        self::ecrireLots(array_map(fn ($id) => self::ecritureMiseAJour($id, $data), $ids));
+        Commande::onlyTrashed()->whereIn('id', $ids)->restore();
     }
 
     /** @param string[] $ids */
     public static function envoyerCorbeillePlusieurs(array $ids): void
     {
-        $data = ['supprime' => true, 'supprime_le' => now()->toIso8601String()];
-        self::ecrireLots(array_map(fn ($id) => self::ecritureMiseAJour($id, $data), $ids));
+        Commande::whereIn('id', $ids)->delete();
     }
 
-    // ---------- Écritures groupées (1 seul appel réseau pour plusieurs lignes) ----------
-
-    private static function ecritureMiseAJour(string $id, array $data): array
+    /**
+     * Retire ces Message_ID du fichier traites_ids.txt (voir
+     * extract_gmail_commandes.py::charger_ids_traites/marquer_traite) :
+     * ce fichier empêche normalement de retraiter deux fois le même mail,
+     * mais après une suppression DÉFINITIVE volontaire, on veut au
+     * contraire que le mail redevienne "non traité" pour que la prochaine
+     * extraction Gmail/Outlook le reconstruise automatiquement.
+     *
+     * @param array<int, string|null> $messageIds
+     */
+    private static function oublierMessageIds(array $messageIds): void
     {
-        return [
-            'update' => ['name' => self::nomDocument($id), 'fields' => self::versChampsFirestore($data)],
-            'updateMask' => ['fieldPaths' => array_keys($data)],
-        ];
-    }
+        $messageIds = array_filter(array_unique($messageIds));
 
-    private static function ecritureSuppression(string $id): array
-    {
-        return ['delete' => self::nomDocument($id)];
-    }
-
-    private static function ecrireLots(array $ecritures): void
-    {
-        if (empty($ecritures)) {
+        if (empty($messageIds) || !file_exists(self::FICHIER_TRAITES)) {
             return;
         }
 
-        self::avecReessai(fn () => self::http()->post(self::baseUrl().':commit', [
-            'json' => ['writes' => $ecritures],
-        ]));
+        $lignes = file(self::FICHIER_TRAITES, FILE_IGNORE_NEW_LINES) ?: [];
+        $restantes = array_filter($lignes, fn ($ligne) => !in_array(trim($ligne), $messageIds, true));
+
+        if (count($restantes) !== count($lignes)) {
+            file_put_contents(self::FICHIER_TRAITES, implode(PHP_EOL, $restantes).(empty($restantes) ? '' : PHP_EOL));
+        }
+    }
+
+    /** Renumérote les id de 1 à N (dans l'ordre chronologique existant), pour qu'il n'y ait jamais de trou après une suppression définitive. */
+    private static function renumeroterIds(): void
+    {
+        $connexion = DB::connection(self::CONNEXION);
+        $connexion->statement('SET @n := 0');
+        $connexion->statement('UPDATE commandes SET id = (@n := @n + 1) ORDER BY id ASC');
+        $connexion->statement('ALTER TABLE commandes AUTO_INCREMENT = 1');
     }
 
     /**
      * Supprime les doublons exacts (même mail, article, désignation, quantité,
-     * source) dans une liste déjà chargée (voir toutes()), en gardant la plus
-     * ancienne occurrence. Toutes les suppressions partent en UN SEUL appel.
-     * Retourne la liste nettoyée (sans les doublons retirés).
+     * source) directement en base, en gardant la plus ancienne occurrence
+     * (id le plus petit). $commandes n'est pas utilisé (gardé pour la
+     * compatibilité d'appel avec CommandeController) : on relit toujours
+     * depuis la base après le nettoyage.
      */
     public static function nettoyerDoublons(array $commandes): array
     {
-        $vus = [];
-        $aSupprimer = [];
+        DB::connection(self::CONNEXION)->delete('
+            DELETE c1 FROM commandes c1
+            INNER JOIN commandes c2
+            ON c1.Message_ID <=> c2.Message_ID
+            AND c1.Article <=> c2.Article
+            AND c1.Designation <=> c2.Designation
+            AND c1.Qte_demandee <=> c2.Qte_demandee
+            AND c1.Source <=> c2.Source
+            AND c1.id > c2.id
+            WHERE c1.deleted_at IS NULL AND c2.deleted_at IS NULL
+        ');
 
-        // $commandes est trié du plus récent au plus ancien : en le parcourant
-        // à l'envers, la première occurrence rencontrée est la plus ancienne.
-        foreach (array_reverse($commandes) as $commande) {
-            $cle = implode('|', [
-                $commande['Message_ID'] ?? '',
-                $commande['Article'] ?? '',
-                $commande['Designation'] ?? '',
-                $commande['Qte_demandee'] ?? '',
-                $commande['Source'] ?? '',
-            ]);
-
-            if (isset($vus[$cle])) {
-                $aSupprimer[$commande['id']] = true;
-                continue;
-            }
-
-            $vus[$cle] = true;
-        }
-
-        if (empty($aSupprimer)) {
-            return $commandes;
-        }
-
-        self::ecrireLots(array_map(fn ($id) => self::ecritureSuppression($id), array_keys($aSupprimer)));
-
-        return array_values(array_filter($commandes, fn ($c) => !isset($aSupprimer[$c['id']])));
+        return self::toutes();
     }
 
     /**
      * Passe au statut "ancienne" toute commande "nouvelle" dont le mail
-     * d'origine (Date_mail) a plus de 2 jours, dans une liste déjà chargée.
-     * Toutes les mises à jour partent en UN SEUL appel.
-     * Retourne la liste avec les statuts à jour.
+     * d'origine (Date_mail) a plus de 2 jours. $commandes n'est pas utilisé
+     * (gardé pour la compatibilité d'appel) : on relit toujours depuis la base.
      */
     public static function vieillirStatuts(array $commandes): array
     {
         $limite = now()->subDays(2);
-        $ecritures = [];
 
-        foreach ($commandes as $i => $commande) {
-            if (($commande['statut'] ?? null) !== 'nouvelle' || empty($commande['Date_mail'])) {
-                continue;
-            }
+        Commande::where('statut', 'nouvelle')
+            ->whereNotNull('Date_mail')
+            ->get()
+            ->each(function (Commande $commande) use ($limite) {
+                try {
+                    $date = \Carbon\Carbon::parse($commande->Date_mail);
+                } catch (\Exception $e) {
+                    return;
+                }
 
-            try {
-                $date = \Carbon\Carbon::parse($commande['Date_mail']);
-            } catch (\Exception $e) {
-                continue;
-            }
+                if ($date->lt($limite)) {
+                    $commande->update(['statut' => 'ancienne']);
+                }
+            });
 
-            if ($date->lt($limite)) {
-                $ecritures[] = self::ecritureMiseAJour($commande['id'], ['statut' => 'ancienne']);
-                $commandes[$i]['statut'] = 'ancienne';
-            }
-        }
-
-        self::ecrireLots($ecritures);
-
-        return $commandes;
+        return self::toutes();
     }
 }
