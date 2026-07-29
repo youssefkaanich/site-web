@@ -96,21 +96,24 @@ class CommandeController extends Controller
     {
         CommandeStore::creer($this->validated($request));
 
-        return redirect()->route('gestion');
+        // back() plutôt qu'une route fixe : reste sur la vue d'où vient la
+        // requête (Toutes/Export/Commercial, ou un groupe précis), au lieu de
+        // toujours renvoyer vers /commandes.
+        return redirect()->back();
     }
 
     public function update(Request $request, string $id)
     {
         CommandeStore::mettreAJour($id, $this->validated($request));
 
-        return redirect()->route('gestion');
+        return redirect()->back();
     }
 
     public function destroy(string $id)
     {
         CommandeStore::supprimerDefinitivement($id);
 
-        return redirect()->route('gestion');
+        return redirect()->back();
     }
 
     /** Supprime définitivement plusieurs commandes sélectionnées. */
@@ -120,7 +123,7 @@ class CommandeController extends Controller
 
         CommandeStore::supprimerDefinitivementPlusieurs($ids);
 
-        return redirect()->route('gestion');
+        return redirect()->back();
     }
 
     /** Envoie à la corbeille (récupérable) toutes les commandes au statut "ancienne". */
@@ -133,7 +136,7 @@ class CommandeController extends Controller
 
         CommandeStore::envoyerCorbeillePlusieurs($ids);
 
-        return redirect()->route('gestion');
+        return redirect()->back();
     }
 
     /** Affiche les commandes envoyées à la corbeille. */
