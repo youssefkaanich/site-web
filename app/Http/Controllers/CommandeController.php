@@ -13,8 +13,15 @@ class CommandeController extends Controller
      * la vue globale (/commandes), "Export" ou "Commercial" pour les
      * sous-pages dédiées (/commandes/export, /commandes/commercial) — même
      * action, réutilisée pour les 3 routes, filtrée par la colonne `Job`.
+     *
+     * $groupeChamp / $groupeValeur (Export -> "Objet", Commercial -> "Emetteur") :
+     * sous-sous-page par groupe, ex. /commandes/export/objet/Recap-Commande.
+     * $groupeChamp est fixé via Route::defaults (comme $service), $groupeValeur
+     * est le vrai paramètre d'URL. Filtré ici côté serveur (pas envoyé au
+     * front puis filtré en JS) : la page ne reçoit que les commandes du
+     * groupe demandé, et l'URL est partageable/navigable au clavier.
      */
-    public function index(?string $service = null)
+    public function index(?string $service = null, ?string $groupeChamp = null, ?string $groupeValeur = null)
     {
         $commandes = CommandeStore::toutes();
 
@@ -39,10 +46,38 @@ class CommandeController extends Controller
             ));
         }
 
+        // Compteurs par groupe (valeurs distinctes de $groupeChamp), calculés
+        // sur la liste déjà filtrée par service -- sert à afficher les boutons
+        // de sous-navigation ("Grouper par ..."), toujours envoyés même sans
+        // groupe sélectionné pour construire les liens.
+        $groupes = [];
+        if ($groupeChamp !== null) {
+            $compteurs = [];
+            foreach ($commandes as $c) {
+                $valeur = trim((string) ($c[$groupeChamp] ?? '')) ?: '(non renseigné)';
+                $compteurs[$valeur] = ($compteurs[$valeur] ?? 0) + 1;
+            }
+            arsort($compteurs);
+            $groupes = collect($compteurs)
+                ->map(fn ($nombre, $valeur) => ['valeur' => $valeur, 'nombre' => $nombre])
+                ->values()
+                ->all();
+
+            if ($groupeValeur !== null) {
+                $commandes = array_values(array_filter(
+                    $commandes,
+                    fn (array $c) => (trim((string) ($c[$groupeChamp] ?? '')) ?: '(non renseigné)') === $groupeValeur
+                ));
+            }
+        }
+
         return \Inertia\Inertia::render('Gestion', [
             'commandes' => $commandes,
             'extraction' => ExtractionController::statut(),
             'service' => $service,
+            'groupeChamp' => $groupeChamp,
+            'groupeValeur' => $groupeValeur,
+            'groupes' => $groupes,
         ]);
     }
 

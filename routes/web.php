@@ -15,7 +15,17 @@ Route::post('/logout', [AuthController::class, 'destroy'])->name('logout')->midd
 Route::middleware('auth')->group(function () {
     Route::get('/commandes', [CommandeController::class, 'index'])->name('gestion');
     Route::get('/commandes/export', [CommandeController::class, 'index'])->name('gestion.export')->defaults('service', 'Export');
+    Route::get('/commandes/export/objet/{groupeValeur}', [CommandeController::class, 'index'])
+        ->where('groupeValeur', '[^/]+')
+        ->name('gestion.export.groupe')
+        ->defaults('service', 'Export')
+        ->defaults('groupeChamp', 'Objet');
     Route::get('/commandes/commercial', [CommandeController::class, 'index'])->name('gestion.commercial')->defaults('service', 'Commercial');
+    Route::get('/commandes/commercial/emetteur/{groupeValeur}', [CommandeController::class, 'index'])
+        ->where('groupeValeur', '[^/]+')
+        ->name('gestion.commercial.groupe')
+        ->defaults('service', 'Commercial')
+        ->defaults('groupeChamp', 'Emetteur');
     Route::get('/stock-production', [StockController::class, 'page'])->name('stockProduction');
     Route::post('/stock-production/importer', [StockController::class, 'importer'])->name('stockProduction.importer');
     Route::get('/stock-production/historique', [StockController::class, 'historique'])->name('stockProduction.historique');

@@ -380,7 +380,14 @@ function PanneauJournal({ journalGmail = [], journalOutlook = [] }) {
     );
 }
 
-export default function Gestion({ commandes = [], extraction = { gmail: false, outlook: false }, service = null }) {
+export default function Gestion({
+    commandes = [],
+    extraction = { gmail: false, outlook: false },
+    service = null,
+    groupeChamp = null,
+    groupeValeur = null,
+    groupes = [],
+}) {
     const [modalCommande, setModalCommande] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [filtre, setFiltre] = useState(null); // null | 'urgentes' | 'echeance' | 'sansQte'
@@ -396,15 +403,6 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
     const [confirmation, setConfirmation] = useState(null); // { message, danger, onConfirm } | null
     const inputImportRef = useRef(null);
     const [masquerDoublons, setMasquerDoublons] = useState(false);
-    // "Sous-pages" par groupe : Export -> groupé par Objet du mail, Commercial
-    // -> groupé par Émetteur. Purement un filtre d'affichage (client), reset
-    // dès qu'on change de vue de service pour ne pas garder un groupe qui n'a
-    // plus de sens ailleurs.
-    const clefGroupe = service === 'Export' ? 'Objet' : service === 'Commercial' ? 'Emetteur' : null;
-    const [groupeActif, setGroupeActif] = useState(null);
-    useEffect(() => {
-        setGroupeActif(null);
-    }, [service]);
     const [menuColonnesOuvert, setMenuColonnesOuvert] = useState(false);
     const [colonnesVisibles, setColonnesVisibles] = useState(() => {
         try {
@@ -510,25 +508,6 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
         commandesAffichees = masquerLesDoublons(commandesAffichees);
     }
 
-    // Groupes disponibles pour la vue active (calculés AVANT le filtre par
-    // groupe, sur la liste déjà filtrée par les cartes stats/doublons, pour
-    // que les compteurs de chaque groupe restent corrects entre eux).
-    let groupes = [];
-    if (clefGroupe) {
-        const compteurs = new Map();
-        for (const c of commandesAffichees) {
-            const valeur = (c[clefGroupe] || '').trim() || '(non renseigné)';
-            compteurs.set(valeur, (compteurs.get(valeur) || 0) + 1);
-        }
-        groupes = [...compteurs.entries()].sort((a, b) => b[1] - a[1]);
-
-        if (groupeActif) {
-            commandesAffichees = commandesAffichees.filter(
-                (c) => ((c[clefGroupe] || '').trim() || '(non renseigné)') === groupeActif
-            );
-        }
-    }
-
     function openAdd() {
         setModalCommande(null);
         setShowModal(true);
@@ -615,34 +594,36 @@ export default function Gestion({ commandes = [], extraction = { gmail: false, o
         >
             <MenuService service={service} />
 
-            {clefGroupe && groupes.length > 0 && (
+            {groupeChamp && groupes.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-6">
                     <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mr-1">
-                        Grouper par {clefGroupe === 'Objet' ? 'objet du mail' : 'émetteur'} :
+                        Grouper par {groupeChamp === 'Objet' ? 'objet du mail' : 'émetteur'} :
                     </span>
-                    <button
-                        onClick={() => setGroupeActif(null)}
+                    <Link
+                        href={groupeChamp === 'Objet' ? '/commandes/export' : '/commandes/commercial'}
+                        preserveScroll
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                            groupeActif === null
+                            groupeValeur === null
                                 ? 'text-white bg-[#0d2b52] border-[#0d2b52] dark:bg-blue-600 dark:border-blue-600'
                                 : 'text-gray-600 bg-white border-gray-300 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
                         }`}
                     >
-                        Toutes ({groupes.reduce((s, [, n]) => s + n, 0)})
-                    </button>
-                    {groupes.map(([valeur, nombre]) => (
-                        <button
-                            key={valeur}
-                            onClick={() => setGroupeActif((actif) => (actif === valeur ? null : valeur))}
-                            title={valeur}
+                        Toutes ({groupes.reduce((s, g) => s + g.nombre, 0)})
+                    </Link>
+                    {groupes.map((g) => (
+                        <Link
+                            key={g.valeur}
+                            href={`${groupeChamp === 'Objet' ? '/commandes/export/objet' : '/commandes/commercial/emetteur'}/${encodeURIComponent(g.valeur)}`}
+                            preserveScroll
+                            title={g.valeur}
                             className={`max-w-[220px] truncate px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                                groupeActif === valeur
+                                groupeValeur === g.valeur
                                     ? 'text-white bg-[#0d2b52] border-[#0d2b52] dark:bg-blue-600 dark:border-blue-600'
                                     : 'text-gray-600 bg-white border-gray-300 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
                             }`}
                         >
-                            {valeur} ({nombre})
-                        </button>
+                            {g.valeur} ({g.nombre})
+                        </Link>
                     ))}
                 </div>
             )}
