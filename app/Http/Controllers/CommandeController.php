@@ -21,8 +21,19 @@ class CommandeController extends Controller
      * front puis filtré en JS) : la page ne reçoit que les commandes du
      * groupe demandé, et l'URL est partageable/navigable au clavier.
      */
-    public function index(?string $service = null, ?string $groupeChamp = null, ?string $groupeValeur = null)
+    public function index(Request $request)
     {
+        // Lus explicitement PAR NOM (Request::route()) plutôt que via des
+        // paramètres de méthode : Laravel résout les arguments du contrôleur
+        // par POSITION dans le tableau des paramètres de route (URI d'abord,
+        // puis defaults() dans l'ordre d'appel), pas par nom -- avec 3
+        // paramètres dont l'ordre varie selon la route (ex: {groupeValeur}
+        // dans l'URI passe avant service/groupeChamp fixés par defaults()),
+        // ça décalait silencieusement les valeurs d'un argument à l'autre.
+        $service = $request->route('service');
+        $groupeChamp = $request->route('groupeChamp');
+        $groupeValeur = $request->route('groupeValeur');
+
         $commandes = CommandeStore::toutes();
 
         // La page se recharge automatiquement toutes les 15-30s (voir
