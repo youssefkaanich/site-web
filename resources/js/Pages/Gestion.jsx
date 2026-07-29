@@ -489,24 +489,26 @@ export default function Gestion({
         return () => clearInterval(id);
     }, [extractionActive, showModal, celluleEdition]);
 
-    const total = commandes.length;
-    const urgentes = commandes.filter((c) => c.Urgent === 'OUI').length;
-    const avecEcheance = commandes.filter((c) => c.Echeance_date || c.Echeance).length;
-    const sansQte = commandes.filter((c) => !c.Qte_demandee && !c.Reste_a_livrer).length;
+    // Doublons masqués AVANT de calculer les compteurs des cartes stats : sinon
+    // "Commandes"/"Urgentes"/... continuaient d'afficher le total brut même
+    // quand le tableau en dessous montrait moins de lignes.
+    const baseListe = masquerDoublons ? masquerLesDoublons(commandes) : commandes;
+
+    const total = baseListe.length;
+    const urgentes = baseListe.filter((c) => c.Urgent === 'OUI').length;
+    const avecEcheance = baseListe.filter((c) => c.Echeance_date || c.Echeance).length;
+    const sansQte = baseListe.filter((c) => !c.Qte_demandee && !c.Reste_a_livrer).length;
 
     function toggleFiltre(nom) {
         setFiltre((actuel) => (actuel === nom ? null : nom));
     }
 
-    let commandesAffichees = commandes.filter((c) => {
+    let commandesAffichees = baseListe.filter((c) => {
         if (filtre === 'urgentes' && c.Urgent !== 'OUI') return false;
         if (filtre === 'echeance' && !(c.Echeance_date || c.Echeance)) return false;
         if (filtre === 'sansQte' && (c.Qte_demandee || c.Reste_a_livrer)) return false;
         return true;
     });
-    if (masquerDoublons) {
-        commandesAffichees = masquerLesDoublons(commandesAffichees);
-    }
 
     function openAdd() {
         setModalCommande(null);
