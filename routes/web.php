@@ -14,13 +14,17 @@ Route::post('/logout', [AuthController::class, 'destroy'])->name('logout')->midd
 
 Route::middleware('auth')->group(function () {
     Route::get('/commandes', [CommandeController::class, 'index'])->name('gestion');
-    Route::get('/commandes/export', [CommandeController::class, 'index'])->name('gestion.export')->defaults('service', 'Export');
+    Route::get('/commandes/export', [CommandeController::class, 'index'])->name('gestion.export')
+        ->defaults('service', 'Export')
+        ->defaults('groupeChamp', 'Objet');
     Route::get('/commandes/export/objet/{groupeValeur}', [CommandeController::class, 'index'])
         ->where('groupeValeur', '[^/]+')
         ->name('gestion.export.groupe')
         ->defaults('service', 'Export')
         ->defaults('groupeChamp', 'Objet');
-    Route::get('/commandes/commercial', [CommandeController::class, 'index'])->name('gestion.commercial')->defaults('service', 'Commercial');
+    Route::get('/commandes/commercial', [CommandeController::class, 'index'])->name('gestion.commercial')
+        ->defaults('service', 'Commercial')
+        ->defaults('groupeChamp', 'Emetteur');
     Route::get('/commandes/commercial/emetteur/{groupeValeur}', [CommandeController::class, 'index'])
         ->where('groupeValeur', '[^/]+')
         ->name('gestion.commercial.groupe')
