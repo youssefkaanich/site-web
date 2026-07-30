@@ -256,6 +256,50 @@ class StockController extends Controller
         ]);
     }
 
+    /**
+     * Quantité en stock par article, d'après l'import de stock le plus récent
+     * (un article a plusieurs emplacements -> quantités additionnées).
+     * Utilisé par la page Analyse pour confronter commandes et stock réel.
+     *
+     * @return array{quantites: array<string, float>, titreStock: ?string, nomFichier: ?string}
+     */
+    public static function quantitesParArticle(): array
+    {
+        $dossier = storage_path('app/stock_production_historique');
+        $fichiers = is_dir($dossier) ? (glob($dossier.'/*.json') ?: []) : [];
+        usort($fichiers, fn ($a, $b) => filemtime($b) <=> filemtime($a));
+
+        foreach ($fichiers as $chemin) {
+            $donnees = json_decode(file_get_contents($chemin), true);
+            $colonnes = collect($donnees['colonnes'] ?? []);
+
+            $colArticle = $colonnes->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
+            $colQte = $colonnes->first(fn ($c) => str_contains(self::normaliserLabel($c['label']), 'qte'))
+                ?? $colonnes->first(fn ($c) => str_contains(self::normaliserLabel($c['label']), 'quantite'));
+
+            if (!$colArticle || !$colQte) {
+                continue;
+            }
+
+            $quantites = [];
+            foreach ($donnees['lignes'] ?? [] as $ligne) {
+                $article = trim((string) ($ligne[$colArticle['key']] ?? ''));
+                if ($article === '') {
+                    continue;
+                }
+                $quantites[$article] = ($quantites[$article] ?? 0) + (float) ($ligne[$colQte['key']] ?? 0);
+            }
+
+            return [
+                'quantites' => $quantites,
+                'titreStock' => $donnees['titreStock'] ?? null,
+                'nomFichier' => $donnees['nomFichier'] ?? null,
+            ];
+        }
+
+        return ['quantites' => [], 'titreStock' => null, 'nomFichier' => null];
+    }
+
     /** Compare des noms de colonnes en ignorant accents/espaces/tirets/casse (même logique que basestock.py). */
     private static function normaliserLabel(?string $label): string
     {

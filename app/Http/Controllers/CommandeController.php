@@ -212,6 +212,34 @@ class CommandeController extends Controller
             ->sortDesc()
             ->take(5);
 
+        // Suivi Export/Commercial : chaque commande confrontée au stock réel
+        // de son article (rapprochement par nom d'article, comme la fiche
+        // article -- voir StockController::quantitesParArticle()).
+        $stock = StockController::quantitesParArticle();
+
+        $suivi = $commandes
+            ->filter(fn (array $c) => in_array($c['Job'] ?? null, ['Export', 'Commercial'], true))
+            ->map(function (array $c) use ($stock) {
+                $article = trim((string) ($c['Article'] ?? ''));
+                $enStock = $stock['quantites'][$article] ?? 0;
+                $demandee = is_numeric($c['Qte_demandee'] ?? null) ? (float) $c['Qte_demandee'] : null;
+
+                return [
+                    'id' => $c['id'],
+                    'Job' => $c['Job'],
+                    'Article' => $c['Article'],
+                    'Designation' => $c['Designation'],
+                    'Emetteur' => $c['Emetteur'],
+                    'Date_mail' => $c['Date_mail'],
+                    'Urgent' => $c['Urgent'],
+                    'Note' => $c['Note'],
+                    'Qte_demandee' => $c['Qte_demandee'],
+                    'qteStock' => $enStock,
+                    'suffisant' => $demandee === null ? null : $enStock >= $demandee,
+                ];
+            })
+            ->values();
+
         return \Inertia\Inertia::render('Analyse', [
             'total' => $commandes->count(),
             'urgentes' => $commandes->where('Urgent', 'OUI')->count(),
@@ -219,6 +247,11 @@ class CommandeController extends Controller
             'parJour' => $parJour,
             'topArticles' => $topArticles,
             'topDestinations' => $topDestinations,
+            'suivi' => $suivi,
+            'stockSource' => [
+                'nomFichier' => $stock['nomFichier'],
+                'titreStock' => $stock['titreStock'],
+            ],
         ]);
     }
 
