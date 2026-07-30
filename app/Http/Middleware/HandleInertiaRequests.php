@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\CommandeStore;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -42,6 +44,12 @@ class HandleInertiaRequests extends Middleware
                     ? ['name' => $request->user()->name, 'email' => $request->user()->email]
                     : null,
             ],
+            // Badge "Corbeille" de la sidebar. Mis en cache 10s : la page
+            // Commandes se recharge toute seule toutes les 15-30s, inutile de
+            // refaire ce COUNT à chaque rechargement.
+            'nombreCorbeille' => $request->user()
+                ? Cache::remember('corbeille:nombre', 10, fn () => CommandeStore::nombreCorbeille())
+                : 0,
             // Message flash affiché en toast (voir AppLayout.jsx) après une
             // redirection -- ex: article introuvable dans le stock actuel.
             'flash' => [

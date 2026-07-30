@@ -113,6 +113,12 @@ class CommandeStore
         return count($idsASupprimer);
     }
 
+    /** Nombre de commandes dans la corbeille (COUNT seul, pas de chargement des lignes) -- badge de la sidebar. */
+    public static function nombreCorbeille(): int
+    {
+        return Commande::onlyTrashed()->count();
+    }
+
     public static function trouver(string $id): ?array
     {
         $commande = Commande::withTrashed()->find($id);

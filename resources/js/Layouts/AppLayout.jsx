@@ -1,24 +1,27 @@
 import { useEffect, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Toaster from '../Components/Toaster';
-import { IconSun, IconMoon } from '../Components/Icons';
+import { IconSun, IconMoon, IconPower } from '../Components/Icons';
 import { toast } from '../hooks/toast';
 
-function NavLink({ href, label, active, icon }) {
+/** Lien de navigation : pastille blanche pleine quand actif, badge rouge optionnel à droite. */
+function NavLink({ href, label, active, icon, badge = null }) {
     return (
         <Link
             href={href}
-            className={`relative flex items-center gap-2.5 rounded-lg pl-4 pr-4 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-[0.97] ${
+            className={`flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm transition-all duration-200 active:scale-[0.98] ${
                 active
-                    ? 'bg-white/15 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
-                    : 'text-blue-100/70 hover:bg-white/8 hover:text-white'
+                    ? 'bg-white text-[#0d2b52] font-bold shadow-md'
+                    : 'text-blue-50/90 font-semibold hover:bg-white/10 hover:text-white'
             }`}
         >
-            {active && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
-            )}
             {icon}
-            {label}
+            <span className="flex-1 truncate">{label}</span>
+            {badge !== null && badge > 0 && (
+                <span className="shrink-0 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold shadow-[0_0_10px_rgba(239,68,68,0.6)]">
+                    {badge}
+                </span>
+            )}
         </Link>
     );
 }
@@ -119,41 +122,55 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                         sidebarOuverte ? 'w-64' : 'w-0 border-r-0'
                     }`}
                 >
-                    <div className="w-64 px-5 pt-5 pb-4 border-b border-white/10">
-                        <div className="inline-flex bg-white rounded-xl px-3 py-2 shadow-sm">
-                            <img src="/images/logo-sopal.png" alt="Sopal" className="h-11 w-auto" />
+                    {/* Carte logo + intitulé de l'outil */}
+                    <div className="w-64 px-4 pt-4">
+                        <div className="rounded-2xl bg-white/[0.07] border border-white/10 p-4">
+                            <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex justify-center">
+                                <img src="/images/logo-sopal.png" alt="Sopal" className="h-10 w-auto" />
+                            </div>
+                            <p className="text-[13px] leading-snug text-blue-100/70 mt-3">
+                                Interface de suivi des commandes et du stock
+                            </p>
                         </div>
-                        <p className="text-xs text-blue-100/60 mt-2.5">Suivi des commandes</p>
                     </div>
 
-                    <nav className="w-64 flex-1 px-3 py-5 space-y-1">
-                        <div className="pb-2 mb-1 border-b border-white/10">
-                            <BoutonModeSombre />
+                    {/* Carte utilisateur + bascule mode sombre */}
+                    <div className="w-64 px-4 pt-3">
+                        <div className="rounded-2xl bg-white/[0.07] border border-white/10 p-4">
+                            <p className="font-bold text-white leading-tight truncate">
+                                {utilisateur?.name || 'Utilisateur'}
+                            </p>
+                            <p className="text-[13px] text-blue-100/70 truncate mt-0.5">{utilisateur?.email}</p>
+                            <div className="mt-3">
+                                <BoutonModeSombre />
+                            </div>
                         </div>
+                    </div>
+
+                    <nav className="w-64 flex-1 px-4 pt-5 pb-3 space-y-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-blue-300/80 px-1 pb-1.5">
+                            Navigation
+                        </p>
                         <NavLink href="/commandes" label="Commandes" active={url.startsWith('/commandes')} />
                         <NavLink href="/stock-production" label="Stock / Production" active={url.startsWith('/stock-production')} />
                         <NavLink href="/analyse" label="Analyse" active={url.startsWith('/analyse')} />
-                        <NavLink href="/corbeille" label="Corbeille" icon={<IconeCorbeille />} active={url.startsWith('/corbeille')} />
+                        <NavLink
+                            href="/corbeille"
+                            label="Corbeille"
+                            icon={<IconeCorbeille />}
+                            active={url.startsWith('/corbeille')}
+                            badge={props.nombreCorbeille ?? 0}
+                        />
                     </nav>
 
-                    <div className="w-64 px-4 py-4 border-t border-white/10">
-                        <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-full bg-white/15 flex items-center justify-center text-sm font-bold shrink-0">
-                                {(utilisateur?.name || '?').charAt(0).toUpperCase()}
-                            </div>
-                            <div className="text-sm min-w-0 flex-1">
-                                <p className="font-semibold leading-tight truncate">{utilisateur?.name || 'Utilisateur'}</p>
-                                <p className="text-xs text-blue-100/60 truncate">{utilisateur?.email}</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={deconnexion}
-                                title="Se déconnecter"
-                                className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg text-blue-100/70 hover:bg-white/10 hover:text-white transition"
-                            >
-                                ⏻
-                            </button>
-                        </div>
+                    <div className="w-64 px-4 pb-4">
+                        <button
+                            type="button"
+                            onClick={deconnexion}
+                            className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.07] hover:bg-white/15 px-4 py-2.5 text-sm font-semibold text-blue-50/90 hover:text-white transition"
+                        >
+                            <IconPower className="h-4 w-4" /> Se déconnecter
+                        </button>
                     </div>
                 </aside>
 
