@@ -37,14 +37,13 @@ class CommandeController extends Controller
         $commandes = CommandeStore::toutes();
 
         // La page se recharge automatiquement toutes les 15-30s (voir
-        // Gestion.jsx) : refaire le nettoyage des doublons + le vieillissement
-        // des statuts à CHAQUE rechargement scanne toute la table pour rien
-        // la plupart du temps. Cache::add ne pose le verrou que s'il n'existe
-        // pas déjà -> ce bloc ne tourne donc plus qu'une fois par minute max,
-        // quel que soit le nombre de rechargements entre-temps.
+        // Gestion.jsx) : refaire le nettoyage des doublons à CHAQUE
+        // rechargement scanne toute la table pour rien la plupart du temps.
+        // Cache::add ne pose le verrou que s'il n'existe pas déjà -> ce bloc
+        // ne tourne donc plus qu'une fois par minute max, quel que soit le
+        // nombre de rechargements entre-temps.
         if (Cache::add('commandes:verrou_nettoyage', true, 60)) {
             $commandes = CommandeStore::nettoyerDoublons($commandes);
-            $commandes = CommandeStore::vieillirStatuts($commandes);
         }
 
         // Filtre par service AVANT l'envoi à React (pas juste côté front) :
@@ -126,19 +125,6 @@ class CommandeController extends Controller
         return redirect()->back();
     }
 
-    /** Envoie à la corbeille (récupérable) toutes les commandes au statut "ancienne". */
-    public function viderAnciennes()
-    {
-        $ids = collect(CommandeStore::toutes())
-            ->filter(fn (array $c) => ($c['statut'] ?? null) === 'ancienne')
-            ->pluck('id')
-            ->all();
-
-        CommandeStore::envoyerCorbeillePlusieurs($ids);
-
-        return redirect()->back();
-    }
-
     /** Affiche les commandes envoyées à la corbeille. */
     public function corbeille()
     {
@@ -180,11 +166,6 @@ class CommandeController extends Controller
     {
         $commandes = collect(CommandeStore::toutes());
 
-        $parStatut = $commandes
-            ->groupBy(fn (array $c) => $c['statut'] ?? 'Inconnu')
-            ->map->count()
-            ->sortDesc();
-
         $parSource = $commandes
             ->groupBy(fn (array $c) => $c['Source'] ?? 'Inconnu')
             ->map->count()
@@ -225,7 +206,6 @@ class CommandeController extends Controller
         return \Inertia\Inertia::render('Analyse', [
             'total' => $commandes->count(),
             'urgentes' => $commandes->where('Urgent', 'OUI')->count(),
-            'parStatut' => $parStatut,
             'parSource' => $parSource,
             'parJour' => $parJour,
             'topArticles' => $topArticles,
@@ -258,7 +238,6 @@ class CommandeController extends Controller
             'Echeance_date' => 'Date échéance',
             'Urgent' => 'Urgent',
             'Note' => 'Note',
-            'statut' => 'Statut',
         ];
     }
 
@@ -387,7 +366,6 @@ class CommandeController extends Controller
             'Echeance_date' => 'nullable|string|max:255',
             'Urgent' => 'nullable|string|max:10',
             'Note' => 'nullable|string',
-            'statut' => 'nullable|string|max:255',
         ]);
     }
 }

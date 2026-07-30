@@ -15,7 +15,6 @@ const COLONNES_AFFICHEES = [
     { key: 'Date_mail', label: 'Date mail' },
     { key: 'Emetteur', label: 'Émetteur' },
     { key: 'Job', label: 'Job' },
-    { key: 'statut', label: 'Statut' },
 ];
 
 export default function Corbeille({ commandes = [] }) {

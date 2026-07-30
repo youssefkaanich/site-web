@@ -9,7 +9,6 @@ const PALETTE = [
     'bg-[#e87ba4] dark:bg-[#d55181]', // 5 magenta
 ];
 
-const ETIQUETTES_STATUT = { nouvelle: 'Nouvelle', ancienne: 'Ancienne' };
 const ETIQUETTES_SOURCE = { tableau: 'Tableau', texte: 'Texte libre', 'image-ocr': 'Image (OCR)' };
 
 function CarteStat({ label, value, accent }) {
@@ -98,18 +97,11 @@ function GraphiqueJournalier({ parJour }) {
 export default function Analyse({
     total = 0,
     urgentes = 0,
-    parStatut = {},
     parSource = {},
     parJour = {},
     topArticles = {},
     topDestinations = {},
 }) {
-    const donneesStatut = Object.entries(parStatut).map(([cle, valeur], i) => ({
-        label: ETIQUETTES_STATUT[cle] || cle,
-        value: valeur,
-        couleur: PALETTE[i % PALETTE.length],
-    }));
-
     const donneesSource = Object.entries(parSource).map(([cle, valeur], i) => ({
         label: ETIQUETTES_SOURCE[cle] || cle,
         value: valeur,
@@ -139,15 +131,12 @@ export default function Analyse({
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                         <CarteStat label="Total commandes" value={total} />
                         <CarteStat label="Urgentes" value={urgentes} accent />
-                        <CarteStat label="Nouvelles" value={parStatut.nouvelle ?? 0} />
-                        <CarteStat label="Anciennes" value={parStatut.ancienne ?? 0} />
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-                        <GraphiqueBarresHorizontal titre="Commandes par statut" donnees={donneesStatut} />
+                    <div className="mb-5">
                         <GraphiqueBarresHorizontal titre="Commandes par source" donnees={donneesSource} />
                     </div>
 

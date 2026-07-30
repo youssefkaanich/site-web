@@ -51,8 +51,6 @@ class CommandeStore
 
     public static function creer(array $data): string
     {
-        $data['statut'] = $data['statut'] ?? 'nouvelle';
-
         return (string) Commande::create($data)->id;
     }
 
@@ -157,33 +155,6 @@ class CommandeStore
             AND c1.id > c2.id
             WHERE c1.deleted_at IS NULL AND c2.deleted_at IS NULL
         ');
-
-        return self::toutes();
-    }
-
-    /**
-     * Passe au statut "ancienne" toute commande "nouvelle" dont le mail
-     * d'origine (Date_mail) a plus de 2 jours. $commandes n'est pas utilisé
-     * (gardé pour la compatibilité d'appel) : on relit toujours depuis la base.
-     */
-    public static function vieillirStatuts(array $commandes): array
-    {
-        $limite = now()->subDays(2);
-
-        Commande::where('statut', 'nouvelle')
-            ->whereNotNull('Date_mail')
-            ->get()
-            ->each(function (Commande $commande) use ($limite) {
-                try {
-                    $date = \Carbon\Carbon::parse($commande->Date_mail);
-                } catch (\Exception $e) {
-                    return;
-                }
-
-                if ($date->lt($limite)) {
-                    $commande->update(['statut' => 'ancienne']);
-                }
-            });
 
         return self::toutes();
     }

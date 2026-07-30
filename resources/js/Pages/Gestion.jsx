@@ -39,14 +39,13 @@ const COLUMNS = [
     { key: 'Destination', label: 'Destination', width: 130 },
     { key: 'Urgent', label: 'Urgent', width: 90 },
     { key: 'Note', label: 'Note', width: 160 },
-    { key: 'statut', label: 'Statut', width: 100 },
 ];
 
 const ACTIONS_WIDTH = 150;
 
 // Colonnes affichées par défaut (les autres restent disponibles via "Colonnes ▾")
 // pour ne pas surcharger le tableau visuellement dès l'ouverture de la page.
-const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Objet', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Urgent', 'statut'];
+const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Objet', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Urgent'];
 const CLE_COLONNES_VISIBLES = 'sopal-commandes-colonnes-visibles';
 
 const EMPTY_FORM = {
@@ -70,7 +69,6 @@ const EMPTY_FORM = {
     Echeance_date: '',
     Urgent: '',
     Note: '',
-    statut: '',
 };
 
 function gmailSearchUrl(messageId) {
@@ -399,7 +397,6 @@ export default function Gestion({
     const [valeurEdition, setValeurEdition] = useState('');
     const [selection, setSelection] = useState([]); // liste des id cochés
     const [importEnCours, setImportEnCours] = useState(false);
-    const [viderEnCours, setViderEnCours] = useState(false);
     const [confirmation, setConfirmation] = useState(null); // { message, danger, onConfirm } | null
     const inputImportRef = useRef(null);
     const [masquerDoublons, setMasquerDoublons] = useState(false);
@@ -533,20 +530,6 @@ export default function Gestion({
                 setConfirmation(null);
                 router.delete(`/commandes/${c.id}`, {
                     onSuccess: () => toast('Commande supprimée.'),
-                });
-            },
-        });
-    }
-
-    function viderAnciennes() {
-        setConfirmation({
-            message: 'Envoyer toutes les commandes "ancienne" à la corbeille ? Tu pourras les restaurer depuis la corbeille.',
-            onConfirm: () => {
-                setConfirmation(null);
-                setViderEnCours(true);
-                router.post('/commandes/vider-anciennes', {}, {
-                    onSuccess: () => toast('Commandes anciennes envoyées à la corbeille.'),
-                    onFinish: () => setViderEnCours(false),
                 });
             },
         });
@@ -799,17 +782,6 @@ export default function Gestion({
                             </div>
                         </div>
                     </div>
-                    <button
-                        onClick={viderAnciennes}
-                        disabled={viderEnCours}
-                        title="Envoie à la corbeille toutes les commandes au statut « ancienne »"
-                        className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 shadow-sm disabled:opacity-50 dark:bg-amber-900/20 dark:border-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                    >
-                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/40">
-                            {viderEnCours ? <IconLoader className="h-3.5 w-3.5 animate-spin" /> : <IconTrash className="h-3.5 w-3.5" />}
-                        </span>
-                        {viderEnCours ? 'Vidage en cours…' : 'Vider les anciennes'}
-                    </button>
                     <a
                         href="/commandes/exporter-excel"
                         className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 hover:bg-gray-200 shadow-sm dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
