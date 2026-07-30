@@ -70,9 +70,14 @@ class CommandeController extends Controller
         // onglet affiche son propre total quel que soit celui qui est actif.
         $sousOnglets = null;
         if ($categorie !== null) {
+            // Clé du sous-onglet "hors chantier" : elle porte le nom du
+            // service ('export' ou 'commercial'), l'autre est toujours
+            // 'chantier' (voir SOUS_ONGLETS_PAR_SERVICE côté React).
+            $cleHorsChantier = $service === 'Commercial' ? 'commercial' : 'export';
+
             $nbChantier = count(array_filter($commandes, fn (array $c) => self::estChantier($c)));
             $sousOnglets = [
-                'export' => count($commandes) - $nbChantier,
+                $cleHorsChantier => count($commandes) - $nbChantier,
                 'chantier' => $nbChantier,
             ];
 

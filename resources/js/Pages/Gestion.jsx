@@ -158,11 +158,17 @@ const VUES_SERVICE = [
     { service: 'Commercial', label: 'Commercial', href: '/commandes/commercial', Icone: IconBriefcase, couleur: COULEUR_COMMERCIAL },
 ];
 
-/** Sous-onglets de "Commande ferme" : exclusifs (voir estChantier). */
-const SOUS_ONGLETS = [
-    { categorie: 'export', label: 'Export', href: '/commandes/export' },
-    { categorie: 'chantier', label: 'Chantier', href: '/commandes/export/chantier' },
-];
+/** Sous-onglets par service : 2 onglets exclusifs, "hors chantier" et "chantier" (voir estChantier). */
+const SOUS_ONGLETS_PAR_SERVICE = {
+    Export: [
+        { categorie: 'export', label: 'Export', href: '/commandes/export' },
+        { categorie: 'chantier', label: 'Chantier', href: '/commandes/export/chantier' },
+    ],
+    Commercial: [
+        { categorie: 'commercial', label: 'Commercial', href: '/commandes/commercial' },
+        { categorie: 'chantier', label: 'Chantier', href: '/commandes/commercial/chantier' },
+    ],
+};
 
 /** Suffixe du titre ("Gestion des commandes — Chantier"), même code couleur que les onglets. */
 const SUFFIXES_TITRE = {
@@ -197,11 +203,11 @@ function MenuService({ service }) {
     );
 }
 
-/** Sous-navigation Export / Chantier sous "Commande ferme" (vraies pages, filtrées côté serveur). */
-function MenuSousOnglet({ categorie, sousOnglets }) {
+/** Sous-navigation "hors chantier" / Chantier sous un service (vraies pages, filtrées côté serveur). */
+function MenuSousOnglet({ service, categorie, sousOnglets }) {
     return (
         <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-800 mb-6">
-            {SOUS_ONGLETS.map((onglet) => {
+            {(SOUS_ONGLETS_PAR_SERVICE[service] ?? []).map((onglet) => {
                 const actif = categorie === onglet.categorie;
                 const nombre = sousOnglets?.[onglet.categorie];
                 return (
@@ -228,7 +234,7 @@ function MenuSousOnglet({ categorie, sousOnglets }) {
 /** Fil d'Ariane : "Commandes > Commande ferme > Chantier > <groupe>". */
 function FilAriane({ service, categorie, groupeValeur }) {
     const vue = VUES_SERVICE.find((v) => v.service === service);
-    const sousOnglet = SOUS_ONGLETS.find((o) => o.categorie === categorie);
+    const sousOnglet = (SOUS_ONGLETS_PAR_SERVICE[service] ?? []).find((o) => o.categorie === categorie);
 
     const etapes = [{ label: 'Commandes', href: '/commandes' }];
     if (vue?.service) etapes.push({ label: vue.label, href: vue.href });
@@ -683,11 +689,8 @@ export default function Gestion({
     // Racine du sous-onglet actif : sert de base aux liens de groupement, pour
     // rester dans Export ou dans Chantier au lieu de retomber sur l'autre.
     const baseGroupe =
-        service === 'Commercial'
-            ? '/commandes/commercial'
-            : categorie === 'chantier'
-                ? '/commandes/export/chantier'
-                : '/commandes/export';
+        (SOUS_ONGLETS_PAR_SERVICE[service] ?? []).find((o) => o.categorie === categorie)?.href
+        ?? (service === 'Commercial' ? '/commandes/commercial' : '/commandes/export');
 
     return (
         <AppLayout
@@ -699,7 +702,9 @@ export default function Gestion({
 
             <MenuService service={service} />
 
-            {categorie !== null && <MenuSousOnglet categorie={categorie} sousOnglets={sousOnglets} />}
+            {categorie !== null && (
+                <MenuSousOnglet service={service} categorie={categorie} sousOnglets={sousOnglets} />
+            )}
 
             {groupeChamp && groupes.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-6">
