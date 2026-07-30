@@ -188,8 +188,7 @@ export default function StockArticleDetail({
                             <table className="w-full text-sm border-collapse">
                                 <thead>
                                     <tr className="text-left text-gray-500 dark:text-gray-400">
-
-
+                                        {['Date mail', 'Émetteur', 'Job', 'Désignation', 'Qté demandée', 'Destination', 'Urgent'].map((label) => (
                                             <th
                                                 key={label}
                                                 className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 last:border-r-0"
