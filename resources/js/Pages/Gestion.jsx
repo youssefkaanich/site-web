@@ -46,7 +46,7 @@ const ACTIONS_WIDTH = 150;
 
 // Colonnes affichées par défaut (les autres restent disponibles via "Colonnes ▾")
 // pour ne pas surcharger le tableau visuellement dès l'ouverture de la page.
-const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Urgent', 'statut'];
+const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Objet', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Urgent', 'statut'];
 const CLE_COLONNES_VISIBLES = 'sopal-commandes-colonnes-visibles';
 
 const EMPTY_FORM = {
