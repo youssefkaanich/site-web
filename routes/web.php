@@ -14,13 +14,28 @@ Route::post('/logout', [AuthController::class, 'destroy'])->name('logout')->midd
 
 Route::middleware('auth')->group(function () {
     Route::get('/commandes', [CommandeController::class, 'index'])->name('gestion');
+    // "Commande ferme" (libellé affiché) = service Export en base, subdivisé
+    // en 2 sous-onglets exclusifs : export (commande ferme classique) et
+    // chantier (mot "chantier" dans l'objet ou le corps du mail).
     Route::get('/commandes/export', [CommandeController::class, 'index'])->name('gestion.export')
         ->defaults('service', 'Export')
+        ->defaults('categorie', 'export')
         ->defaults('groupeChamp', 'Objet');
     Route::get('/commandes/export/objet/{groupeValeur}', [CommandeController::class, 'index'])
         ->where('groupeValeur', '[^/]+')
         ->name('gestion.export.groupe')
         ->defaults('service', 'Export')
+        ->defaults('categorie', 'export')
+        ->defaults('groupeChamp', 'Objet');
+    Route::get('/commandes/export/chantier', [CommandeController::class, 'index'])->name('gestion.chantier')
+        ->defaults('service', 'Export')
+        ->defaults('categorie', 'chantier')
+        ->defaults('groupeChamp', 'Objet');
+    Route::get('/commandes/export/chantier/objet/{groupeValeur}', [CommandeController::class, 'index'])
+        ->where('groupeValeur', '[^/]+')
+        ->name('gestion.chantier.groupe')
+        ->defaults('service', 'Export')
+        ->defaults('categorie', 'chantier')
         ->defaults('groupeChamp', 'Objet');
     Route::post('/commandes/export/supprimer-doublons', [CommandeController::class, 'supprimerDoublons'])
         ->name('commandes.supprimerDoublons')

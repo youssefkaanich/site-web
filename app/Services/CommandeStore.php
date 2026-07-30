@@ -76,9 +76,14 @@ class CommandeStore
      * (Gestion.jsx), mais ici les autres lignes sont réellement envoyées à
      * la corbeille au lieu d'être juste masquées à l'affichage.
      *
+     * $filtreSupplementaire restreint le périmètre au-delà du service (ex :
+     * ne dédoublonner que le sous-onglet "Chantier") -- la règle métier reste
+     * dans le contrôleur, ce service ne fait qu'appliquer le test reçu.
+     *
+     * @param  callable(array):bool|null  $filtreSupplementaire
      * @return int Nombre de commandes envoyées à la corbeille.
      */
-    public static function supprimerDoublons(?string $service): int
+    public static function supprimerDoublons(?string $service, ?callable $filtreSupplementaire = null): int
     {
         $commandes = self::toutes();
         if ($service !== null) {
@@ -86,6 +91,9 @@ class CommandeStore
                 $commandes,
                 fn (array $c) => ($c['Job'] ?? null) === $service
             ));
+        }
+        if ($filtreSupplementaire !== null) {
+            $commandes = array_values(array_filter($commandes, $filtreSupplementaire));
         }
 
         $parGroupe = [];

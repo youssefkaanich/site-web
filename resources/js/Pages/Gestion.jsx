@@ -20,6 +20,7 @@ import {
     IconTerminal,
 } from '../Components/Icons';
 import { estArticleValide } from '../utils/articleValidation';
+import { estChantier } from '../utils/classificationCommande';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 import { toast } from '../hooks/toast';
 
@@ -145,15 +146,23 @@ const COULEUR_EXPORT = 'text-blue-700 dark:text-blue-400';
 const COULEUR_COMMERCIAL = 'text-[#7a2331] dark:text-[#e8b4bc]';
 const COULEUR_TOUTES = 'text-[#0d2b52] dark:text-white';
 
+// "Commande ferme" n'est qu'un LIBELLÉ : la donnée reste `Job = "Export"` en
+// base, seul l'affichage change (voir routes/web.php, service = 'Export').
 const VUES_SERVICE = [
     { service: null, label: 'Toutes', href: '/commandes', Icone: IconGrid, couleur: COULEUR_TOUTES },
-    { service: 'Export', label: 'Export', href: '/commandes/export', Icone: IconGlobe, couleur: COULEUR_EXPORT },
+    { service: 'Export', label: 'Commande ferme', href: '/commandes/export', Icone: IconGlobe, couleur: COULEUR_EXPORT },
     { service: 'Commercial', label: 'Commercial', href: '/commandes/commercial', Icone: IconBriefcase, couleur: COULEUR_COMMERCIAL },
 ];
 
-/** Suffixe du titre ("Gestion des commandes — Export"), même code couleur que les onglets. */
+/** Sous-onglets de "Commande ferme" : exclusifs (voir estChantier). */
+const SOUS_ONGLETS = [
+    { categorie: 'export', label: 'Export', href: '/commandes/export' },
+    { categorie: 'chantier', label: 'Chantier', href: '/commandes/export/chantier' },
+];
+
+/** Suffixe du titre ("Gestion des commandes — Chantier"), même code couleur que les onglets. */
 const SUFFIXES_TITRE = {
-    Export: { texte: 'Export', classe: COULEUR_EXPORT },
+    Export: { texte: 'Commande ferme', classe: COULEUR_EXPORT },
     Commercial: { texte: 'Commercial', classe: COULEUR_COMMERCIAL },
 };
 
@@ -181,6 +190,66 @@ function MenuService({ service }) {
                 );
             })}
         </div>
+    );
+}
+
+/** Sous-navigation Export / Chantier sous "Commande ferme" (vraies pages, filtrées côté serveur). */
+function MenuSousOnglet({ categorie, sousOnglets }) {
+    return (
+        <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-800 mb-6">
+            {SOUS_ONGLETS.map((onglet) => {
+                const actif = categorie === onglet.categorie;
+                const nombre = sousOnglets?.[onglet.categorie];
+                return (
+                    <Link
+                        key={onglet.categorie}
+                        href={onglet.href}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+                            actif
+                                ? 'border-blue-700 text-blue-700 dark:border-blue-400 dark:text-blue-400'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        {onglet.label}
+                        {nombre !== undefined && (
+                            <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">({nombre})</span>
+                        )}
+                    </Link>
+                );
+            })}
+        </div>
+    );
+}
+
+/** Fil d'Ariane : "Commandes > Commande ferme > Chantier > <groupe>". */
+function FilAriane({ service, categorie, groupeValeur }) {
+    const vue = VUES_SERVICE.find((v) => v.service === service);
+    const sousOnglet = SOUS_ONGLETS.find((o) => o.categorie === categorie);
+
+    const etapes = [{ label: 'Commandes', href: '/commandes' }];
+    if (vue?.service) etapes.push({ label: vue.label, href: vue.href });
+    if (sousOnglet) etapes.push({ label: sousOnglet.label, href: sousOnglet.href });
+    if (groupeValeur) etapes.push({ label: groupeValeur, href: null });
+
+    if (etapes.length === 1) return null;
+
+    return (
+        <nav className="flex items-center flex-wrap gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-3">
+            {etapes.map((etape, i) => (
+                <span key={`${etape.label}-${i}`} className="flex items-center gap-1.5">
+                    {i > 0 && <span aria-hidden="true">/</span>}
+                    {etape.href && i < etapes.length - 1 ? (
+                        <Link href={etape.href} className="hover:text-gray-600 dark:hover:text-gray-300 hover:underline">
+                            {etape.label}
+                        </Link>
+                    ) : (
+                        <span className="font-semibold text-gray-600 dark:text-gray-300 max-w-[280px] truncate">
+                            {etape.label}
+                        </span>
+                    )}
+                </span>
+            ))}
+        </nav>
     );
 }
 
@@ -385,6 +454,8 @@ export default function Gestion({
     commandes = [],
     extraction = { gmail: false, outlook: false },
     service = null,
+    categorie = null,
+    sousOnglets = null,
     groupeChamp = null,
     groupeValeur = null,
     groupes = [],
@@ -492,7 +563,15 @@ export default function Gestion({
     // Filtre d'affichage appliqué UNE SEULE FOIS ici (composant central,
     // partagé par les 3 vues et leurs sous-pages) : les codes article invalides
     // (voir estArticleValide) sont masqués partout, mais restent en base.
-    const commandesValides = commandes.filter((c) => estArticleValide(c.Article, c.Source));
+    let commandesValides = commandes.filter((c) => estArticleValide(c.Article, c.Source));
+
+    // Garde-fou : le tri Export/Chantier est déjà fait côté serveur, on le
+    // rejoue ici pour garantir l'exclusivité des 2 sous-onglets à l'affichage.
+    if (categorie !== null) {
+        commandesValides = commandesValides.filter(
+            (c) => estChantier(c.Objet, c.Texte_Mail) === (categorie === 'chantier')
+        );
+    }
 
     // Doublons masqués AVANT de calculer les compteurs des cartes stats : sinon
     // "Commandes"/"Urgentes"/... continuaient d'afficher le total brut même
@@ -585,7 +664,7 @@ export default function Gestion({
             danger: true,
             onConfirm: () => {
                 setConfirmation(null);
-                router.post('/commandes/export/supprimer-doublons', {}, {
+                router.post('/commandes/export/supprimer-doublons', { categorie }, {
                     preserveScroll: true,
                     onSuccess: () => toast('Doublons envoyés à la corbeille.'),
                 });
@@ -593,13 +672,26 @@ export default function Gestion({
         });
     }
 
+    // Racine du sous-onglet actif : sert de base aux liens de groupement, pour
+    // rester dans Export ou dans Chantier au lieu de retomber sur l'autre.
+    const baseGroupe =
+        service === 'Commercial'
+            ? '/commandes/commercial'
+            : categorie === 'chantier'
+                ? '/commandes/export/chantier'
+                : '/commandes/export';
+
     return (
         <AppLayout
             title="Gestion des commandes"
             titleSuffix={SUFFIXES_TITRE[service] ?? null}
             subtitle="Commandes extraites automatiquement des mails, mises à jour en temps réel."
         >
+            <FilAriane service={service} categorie={categorie} groupeValeur={groupeValeur} />
+
             <MenuService service={service} />
+
+            {categorie !== null && <MenuSousOnglet categorie={categorie} sousOnglets={sousOnglets} />}
 
             {groupeChamp && groupes.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -607,7 +699,7 @@ export default function Gestion({
                         Grouper par {groupeChamp === 'Objet' ? 'objet du mail' : 'émetteur'} :
                     </span>
                     <Link
-                        href={groupeChamp === 'Objet' ? '/commandes/export' : '/commandes/commercial'}
+                        href={baseGroupe}
                         preserveScroll
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                             groupeValeur === null
@@ -620,7 +712,7 @@ export default function Gestion({
                     {groupes.map((g) => (
                         <Link
                             key={g.valeur}
-                            href={`${groupeChamp === 'Objet' ? '/commandes/export/objet' : '/commandes/commercial/emetteur'}/${encodeURIComponent(g.valeur)}`}
+                            href={`${baseGroupe}/${groupeChamp === 'Objet' ? 'objet' : 'emetteur'}/${encodeURIComponent(g.valeur)}`}
                             preserveScroll
                             title={g.valeur}
                             className={`max-w-[220px] truncate px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
@@ -727,25 +819,28 @@ export default function Gestion({
 
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                    {service === 'Export' ? (
+                    {/* Masquage : disponible partout, y compris sur les 2
+                        sous-onglets de "Commande ferme" (affichage seulement). */}
+                    <button
+                        onClick={() => setMasquerDoublons((v) => !v)}
+                        title="Regroupe par émetteur + article, garde la ligne la plus récente (affichage seulement, rien n'est supprimé)"
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                            masquerDoublons
+                                ? 'text-[#0d2b52] bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-800'
+                                : 'text-gray-700 bg-gray-100 border-gray-300 hover:bg-gray-200 shadow-sm dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <IconLayers className="h-4 w-4" /> {masquerDoublons ? 'Doublons masqués' : 'Masquer les doublons'}
+                    </button>
+                    {/* Suppression réelle : uniquement sur "Commande ferme",
+                        limitée au sous-onglet actif (voir supprimerDoublons). */}
+                    {service === 'Export' && (
                         <button
                             onClick={supprimerDoublons}
-                            title="Envoie les doublons à la corbeille (garde la commande la plus récente par émetteur + article) -- récupérable depuis la corbeille"
+                            title="Envoie les doublons de ce sous-onglet à la corbeille (garde la commande la plus récente par émetteur + article) -- récupérable depuis la corbeille"
                             className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 shadow-sm dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
                         >
                             <IconTrash className="h-4 w-4" /> Supprimer les doublons
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => setMasquerDoublons((v) => !v)}
-                            title="Regroupe par émetteur + article, garde la ligne la plus récente (affichage seulement, rien n'est supprimé)"
-                            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                                masquerDoublons
-                                    ? 'text-[#0d2b52] bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-800'
-                                    : 'text-gray-700 bg-gray-100 border-gray-300 hover:bg-gray-200 shadow-sm dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
-                            }`}
-                        >
-                            <IconLayers className="h-4 w-4" /> {masquerDoublons ? 'Doublons masqués' : 'Masquer les doublons'}
                         </button>
                     )}
                     {filtre && (

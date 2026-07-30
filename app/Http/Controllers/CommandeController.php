@@ -31,6 +31,7 @@ class CommandeController extends Controller
         // dans l'URI passe avant service/groupeChamp fixés par defaults()),
         // ça décalait silencieusement les valeurs d'un argument à l'autre.
         $service = $request->route('service');
+        $categorie = $request->route('categorie');   // null | 'export' | 'chantier'
         $groupeChamp = $request->route('groupeChamp');
         $groupeValeur = $request->route('groupeValeur');
 
@@ -59,6 +60,25 @@ class CommandeController extends Controller
             $commandes = array_values(array_filter(
                 $commandes,
                 fn (array $c) => ($c['Job'] ?? null) === $service
+            ));
+        }
+
+        // Sous-onglets de "Commande ferme" (service Export uniquement) :
+        // export = tout ce qui n'est PAS chantier, chantier = le reste. Les
+        // deux sont exclusifs par construction (même test, branche opposée).
+        // Compteurs des 2 onglets calculés AVANT le filtre, pour que chaque
+        // onglet affiche son propre total quel que soit celui qui est actif.
+        $sousOnglets = null;
+        if ($categorie !== null) {
+            $nbChantier = count(array_filter($commandes, fn (array $c) => self::estChantier($c)));
+            $sousOnglets = [
+                'export' => count($commandes) - $nbChantier,
+                'chantier' => $nbChantier,
+            ];
+
+            $commandes = array_values(array_filter(
+                $commandes,
+                fn (array $c) => self::estChantier($c) === ($categorie === 'chantier')
             ));
         }
 
@@ -91,10 +111,29 @@ class CommandeController extends Controller
             'commandes' => $commandes,
             'extraction' => ExtractionController::statut(),
             'service' => $service,
+            'categorie' => $categorie,
+            'sousOnglets' => $sousOnglets,
             'groupeChamp' => $groupeChamp,
             'groupeValeur' => $groupeValeur,
             'groupes' => $groupes,
         ]);
+    }
+
+    /**
+     * Vrai si la commande relève du sous-onglet "Chantier" : le mot
+     * "chantier" apparaît dans l'objet du mail OU dans le corps du mail
+     * (insensible à la casse et aux accents).
+     *
+     * ATTENTION : règle reproduite à l'identique côté React dans
+     * resources/js/utils/classificationCommande.js — toute modification ici
+     * doit être reportée là-bas.
+     */
+    private static function estChantier(array $commande): bool
+    {
+        $contenu = ($commande['Objet'] ?? '').' '.($commande['Texte_Mail'] ?? '');
+
+        // //u : traite la chaîne en UTF-8 (accents), //i : insensible à la casse
+        return (bool) preg_match('/chantier/iu', $contenu);
     }
 
     /**
@@ -155,10 +194,20 @@ class CommandeController extends Controller
         return redirect()->back();
     }
 
-    /** Envoie à la corbeille tous les doublons de la vue Export (garde la Date_mail la plus récente). */
+    /**
+     * Envoie à la corbeille les doublons de la vue courante (garde la
+     * Date_mail la plus récente). Restreint au sous-onglet actif quand il est
+     * précisé, pour ne jamais toucher l'autre sous-onglet sans le montrer.
+     */
     public function supprimerDoublons(Request $request)
     {
-        CommandeStore::supprimerDoublons($request->route('service'));
+        $categorie = $request->input('categorie'); // null | 'export' | 'chantier'
+
+        $filtre = in_array($categorie, ['export', 'chantier'], true)
+            ? fn (array $c) => self::estChantier($c) === ($categorie === 'chantier')
+            : null;
+
+        CommandeStore::supprimerDoublons($request->route('service'), $filtre);
 
         return redirect()->back();
     }
