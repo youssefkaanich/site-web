@@ -39,32 +39,78 @@ class CommandeStore
     }
 
     /**
-     * Trie par Date_mail décroissant (la plus récente en haut), en tiebreak
-     * sur l'id décroissant si la date est égale/absente/invalide. Date_mail
-     * vient soit de Gmail (en-tête RFC 2822) soit d'Outlook (str(datetime)
-     * Python) -- deux formats différents mais tous deux lisibles nativement
-     * par DateTime, donc pas besoin de normaliser la chaîne comme côté JS.
+     * Timestamp Unix pour une valeur Date_mail, ou 0 si absente/invalide.
+     * Date_mail vient soit de Gmail (en-tête RFC 2822) soit d'Outlook
+     * (str(datetime) Python) -- deux formats différents mais tous deux
+     * lisibles nativement par DateTime, donc pas besoin de normaliser la
+     * chaîne comme côté JS (voir horodatageMail() dans Gestion.jsx).
      */
+    private static function horodatageMail(?string $brut): int
+    {
+        if (empty($brut)) {
+            return 0;
+        }
+        try {
+            return (new \DateTime($brut))->getTimestamp();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /** Trie par Date_mail décroissant (la plus récente en haut), en tiebreak sur l'id décroissant si la date est égale/absente/invalide. */
     private static function trierParDateMail(array $commandes): array
     {
-        $horodatage = function (array $c): int {
-            if (empty($c['Date_mail'])) {
-                return 0;
-            }
-            try {
-                return (new \DateTime($c['Date_mail']))->getTimestamp();
-            } catch (\Exception $e) {
-                return 0;
-            }
-        };
-
-        usort($commandes, function (array $a, array $b) use ($horodatage) {
-            $diff = $horodatage($b) <=> $horodatage($a);
+        usort($commandes, function (array $a, array $b) {
+            $diff = self::horodatageMail($b['Date_mail'] ?? null) <=> self::horodatageMail($a['Date_mail'] ?? null);
 
             return $diff !== 0 ? $diff : ($b['id'] <=> $a['id']);
         });
 
         return $commandes;
+    }
+
+    /**
+     * Envoie à la corbeille tous les doublons (même Émetteur + Article),
+     * en gardant celui avec la Date_mail la plus récente (à date égale, le
+     * plus petit id) -- même règle que masquerLesDoublons() côté JS
+     * (Gestion.jsx), mais ici les autres lignes sont réellement envoyées à
+     * la corbeille au lieu d'être juste masquées à l'affichage.
+     *
+     * @return int Nombre de commandes envoyées à la corbeille.
+     */
+    public static function supprimerDoublons(?string $service): int
+    {
+        $commandes = self::toutes();
+        if ($service !== null) {
+            $commandes = array_values(array_filter(
+                $commandes,
+                fn (array $c) => ($c['Job'] ?? null) === $service
+            ));
+        }
+
+        $parGroupe = [];
+        foreach ($commandes as $c) {
+            $cle = ($c['Emetteur'] ?? '').'|'.($c['Article'] ?? '');
+            if (!isset($parGroupe[$cle])) {
+                $parGroupe[$cle] = $c;
+                continue;
+            }
+
+            $actuel = $parGroupe[$cle];
+            $tActuel = self::horodatageMail($actuel['Date_mail'] ?? null);
+            $tC = self::horodatageMail($c['Date_mail'] ?? null);
+
+            if ($tC === $tActuel ? ($c['id'] < $actuel['id']) : ($tC > $tActuel)) {
+                $parGroupe[$cle] = $c;
+            }
+        }
+
+        $idsAGarder = array_column($parGroupe, 'id');
+        $idsASupprimer = array_values(array_diff(array_column($commandes, 'id'), $idsAGarder));
+
+        self::envoyerCorbeillePlusieurs($idsASupprimer);
+
+        return count($idsASupprimer);
     }
 
     public static function trouver(string $id): ?array

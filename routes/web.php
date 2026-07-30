@@ -22,6 +22,9 @@ Route::middleware('auth')->group(function () {
         ->name('gestion.export.groupe')
         ->defaults('service', 'Export')
         ->defaults('groupeChamp', 'Objet');
+    Route::post('/commandes/export/supprimer-doublons', [CommandeController::class, 'supprimerDoublons'])
+        ->name('commandes.supprimerDoublons')
+        ->defaults('service', 'Export');
     Route::get('/commandes/commercial', [CommandeController::class, 'index'])->name('gestion.commercial')
         ->defaults('service', 'Commercial')
         ->defaults('groupeChamp', 'Emetteur');

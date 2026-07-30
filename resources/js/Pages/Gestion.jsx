@@ -524,12 +524,12 @@ export default function Gestion({
 
     function handleDelete(c) {
         setConfirmation({
-            message: `Supprimer la commande #${c.id} (${c.Article || 'sans article'}) ?`,
+            message: `Envoyer la commande #${c.id} (${c.Article || 'sans article'}) à la corbeille ? Tu pourras la restaurer depuis la corbeille.`,
             danger: true,
             onConfirm: () => {
                 setConfirmation(null);
                 router.delete(`/commandes/${c.id}`, {
-                    onSuccess: () => toast('Commande supprimée.'),
+                    onSuccess: () => toast('Commande envoyée à la corbeille.'),
                 });
             },
         });
@@ -552,7 +552,7 @@ export default function Gestion({
 
     function supprimerSelection() {
         setConfirmation({
-            message: `Supprimer définitivement ${selection.length} commande(s) ? Cette action est irréversible.`,
+            message: `Envoyer ${selection.length} commande(s) à la corbeille ? Tu pourras les restaurer depuis la corbeille.`,
             danger: true,
             onConfirm: () => {
                 setConfirmation(null);
@@ -563,10 +563,24 @@ export default function Gestion({
                         preserveScroll: true,
                         onSuccess: () => {
                             setSelection([]);
-                            toast('Commande(s) supprimée(s) définitivement.');
+                            toast('Commande(s) envoyée(s) à la corbeille.');
                         },
                     }
                 );
+            },
+        });
+    }
+
+    function supprimerDoublons() {
+        setConfirmation({
+            message: 'Envoyer tous les doublons Export à la corbeille (on garde la commande la plus récente de chaque groupe émetteur + article) ? Tu pourras les restaurer depuis la corbeille.',
+            danger: true,
+            onConfirm: () => {
+                setConfirmation(null);
+                router.post('/commandes/export/supprimer-doublons', {}, {
+                    preserveScroll: true,
+                    onSuccess: () => toast('Doublons envoyés à la corbeille.'),
+                });
             },
         });
     }
@@ -705,17 +719,27 @@ export default function Gestion({
 
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => setMasquerDoublons((v) => !v)}
-                        title="Regroupe par émetteur + article, garde la ligne la plus complète (affichage seulement, rien n'est supprimé)"
-                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                            masquerDoublons
-                                ? 'text-[#0d2b52] bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-800'
-                                : 'text-gray-700 bg-gray-100 border-gray-300 hover:bg-gray-200 shadow-sm dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                        <IconLayers className="h-4 w-4" /> {masquerDoublons ? 'Doublons masqués' : 'Masquer les doublons'}
-                    </button>
+                    {service === 'Export' ? (
+                        <button
+                            onClick={supprimerDoublons}
+                            title="Envoie les doublons à la corbeille (garde la commande la plus récente par émetteur + article) -- récupérable depuis la corbeille"
+                            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 shadow-sm dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                        >
+                            <IconTrash className="h-4 w-4" /> Supprimer les doublons
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setMasquerDoublons((v) => !v)}
+                            title="Regroupe par émetteur + article, garde la ligne la plus récente (affichage seulement, rien n'est supprimé)"
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                                masquerDoublons
+                                    ? 'text-[#0d2b52] bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-800'
+                                    : 'text-gray-700 bg-gray-100 border-gray-300 hover:bg-gray-200 shadow-sm dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            <IconLayers className="h-4 w-4" /> {masquerDoublons ? 'Doublons masqués' : 'Masquer les doublons'}
+                        </button>
+                    )}
                     {filtre && (
                         <button
                             onClick={() => setFiltre(null)}

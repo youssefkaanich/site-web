@@ -108,19 +108,28 @@ class CommandeController extends Controller
         return redirect()->back();
     }
 
+    /** Envoie à la corbeille (récupérable) -- la suppression définitive se fait depuis la corbeille elle-même. */
     public function destroy(string $id)
     {
-        CommandeStore::supprimerDefinitivement($id);
+        CommandeStore::envoyerCorbeille($id);
 
         return redirect()->back();
     }
 
-    /** Supprime définitivement plusieurs commandes sélectionnées. */
+    /** Envoie à la corbeille plusieurs commandes sélectionnées. */
     public function destroySelection(Request $request)
     {
         $ids = $request->validate(['ids' => 'required|array', 'ids.*' => 'integer'])['ids'];
 
-        CommandeStore::supprimerDefinitivementPlusieurs($ids);
+        CommandeStore::envoyerCorbeillePlusieurs($ids);
+
+        return redirect()->back();
+    }
+
+    /** Envoie à la corbeille tous les doublons de la vue Export (garde la Date_mail la plus récente). */
+    public function supprimerDoublons(Request $request)
+    {
+        CommandeStore::supprimerDoublons($request->route('service'));
 
         return redirect()->back();
     }
