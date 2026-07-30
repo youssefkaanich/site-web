@@ -38,6 +38,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/stock-production/historique', [StockController::class, 'historique'])->name('stockProduction.historique');
     Route::get('/stock-production/historique/{id}', [StockController::class, 'charger'])->name('stockProduction.charger');
     Route::delete('/stock-production/historique/{id}', [StockController::class, 'supprimerHistorique'])->name('stockProduction.supprimerHistorique');
+    Route::get('/stock-production/articles/{article}', [StockController::class, 'articleDernier'])
+        ->where('article', '[^/]+')
+        ->name('stockProduction.articleDernier');
     Route::get('/stock-production/{id}/articles/{article}', [StockController::class, 'article'])
         ->where('article', '[^/]+')
         ->name('stockProduction.article');

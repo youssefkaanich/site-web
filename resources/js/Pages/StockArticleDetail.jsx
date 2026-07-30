@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
+import BadgeJob from '../Components/BadgeJob';
 import { IconChevronLeft, IconInbox } from '../Components/Icons';
 import { trouverColonne } from '../utils/colonnesStock';
 
@@ -10,7 +11,7 @@ const ONGLETS = [
     { key: 'commandes', label: 'Commandes liées' },
 ];
 
-export default function StockArticleDetail({ idImport, article, nomFichier, titreStock, colonnes, colonneArticleKey, lignes }) {
+export default function StockArticleDetail({ idImport, article, nomFichier, titreStock, colonnes, colonneArticleKey, lignes, commandesLiees = [] }) {
     const [ongletActif, setOngletActif] = useState('infos');
 
     const colonneDesignation = trouverColonne(colonnes, 'designation');
@@ -64,6 +65,9 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
                         }`}
                     >
                         {onglet.label}
+                        {onglet.key === 'commandes' && commandesLiees.length > 0 && (
+                            <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">({commandesLiees.length})</span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -147,13 +151,52 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
                 </div>
             )}
 
-            {/* Onglet : Commandes liées (vide, pour plus tard) */}
+            {/* Onglet : Commandes liées (même Article, rapprochement par nom -- voir StockController::article()) */}
             {ongletActif === 'commandes' && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-dashed border-gray-300 dark:border-gray-700 px-4 py-16 text-center">
-                    <IconInbox className="h-10 w-10 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
-                    <p className="text-gray-500 dark:text-gray-400 font-semibold">Pas encore de commandes liées à cet article.</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">Cette section sera complétée plus tard.</p>
-                </div>
+                commandesLiees.length === 0 ? (
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-dashed border-gray-300 dark:border-gray-700 px-4 py-16 text-center">
+                        <IconInbox className="h-10 w-10 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
+                        <p className="text-gray-500 dark:text-gray-400 font-semibold">Aucune commande liée à cet article.</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">Aucune commande en base ne porte sur l'article "{article}".</p>
+                    </div>
+                ) : (
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm border-collapse">
+                                <thead>
+                                    <tr className="text-left text-gray-500 dark:text-gray-400">
+                                        {['Date mail', 'Émetteur', 'Job', 'Désignation', 'Qté demandée', 'Destination', 'Urgent'].map((label) => (
+                                            <th
+                                                key={label}
+                                                className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 last:border-r-0"
+                                            >
+                                                {label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {commandesLiees.map((c, index) => (
+                                        <tr
+                                            key={c.id}
+                                            className={`border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-blue-50/60 dark:hover:bg-gray-800/60 transition-colors ${
+                                                index % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/40' : 'bg-white dark:bg-gray-900'
+                                            }`}
+                                        >
+                                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">{c.Date_mail || '—'}</td>
+                                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">{c.Emetteur || '—'}</td>
+                                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800">{c.Job ? <BadgeJob job={c.Job} /> : '—'}</td>
+                                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">{c.Designation || '—'}</td>
+                                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 text-right tabular-nums">{c.Qte_demandee ?? '—'}</td>
+                                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">{c.Destination || '—'}</td>
+                                            <td className="px-4 py-2.5 text-gray-900 dark:text-gray-200">{c.Urgent === 'OUI' ? 'Oui' : '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )
             )}
         </AppLayout>
     );

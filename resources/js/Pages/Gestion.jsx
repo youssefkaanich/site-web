@@ -18,6 +18,7 @@ import {
     IconImage,
     IconFileText,
     IconTerminal,
+    IconBox,
 } from '../Components/Icons';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 import { toast } from '../hooks/toast';
@@ -1029,6 +1030,15 @@ export default function Gestion({
                                         >
                                             Modifier
                                         </button>
+                                        {c.Article && (
+                                            <a
+                                                href={`/stock-production/articles/${encodeURIComponent(c.Article)}`}
+                                                title="Voir le stock de cet article"
+                                                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 dark:text-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700"
+                                            >
+                                                <IconBox className="h-3.5 w-3.5" /> Stock
+                                            </a>
+                                        )}
                                         <button
                                             onClick={() => handleDelete(c)}
                                             className="px-2.5 py-1 rounded-md text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/30 dark:hover:bg-red-900/50"

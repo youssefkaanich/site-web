@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CommandeStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
@@ -184,6 +185,15 @@ class StockController extends Controller
             abort(404, "Article \"{$article}\" introuvable dans cet import.");
         }
 
+        // "Commandes liées" : toutes les commandes (Gestion.jsx) portant sur
+        // ce même Article -- lien simple par nom d'article (pas de vraie clé
+        // étrangère, les deux jeux de données n'ont jamais été rapprochés
+        // avant), trim() pour tolérer un espace de saisie différent.
+        $commandesLiees = collect(CommandeStore::toutes())
+            ->filter(fn (array $c) => trim((string) ($c['Article'] ?? '')) === trim($article))
+            ->values()
+            ->all();
+
         return \Inertia\Inertia::render('StockArticleDetail', [
             'idImport' => $id,
             'article' => $article,
@@ -192,7 +202,39 @@ class StockController extends Controller
             'colonnes' => $donnees['colonnes'],
             'colonneArticleKey' => $colonneArticle['key'],
             'lignes' => $lignesArticle,
+            'commandesLiees' => $commandesLiees,
         ]);
+    }
+
+    /**
+     * Retrouve un article dans le dernier import de stock contenant ce nom
+     * d'article, et redirige vers sa page de détail -- point d'entrée depuis
+     * la page Commandes (Gestion.jsx), qui ne connaît pas l'id de l'import.
+     */
+    public function articleDernier(string $article)
+    {
+        $fichiers = glob($this->dossierHistorique().'/*.json') ?: [];
+        usort($fichiers, fn ($a, $b) => filemtime($b) <=> filemtime($a));
+
+        foreach ($fichiers as $chemin) {
+            $donnees = json_decode(file_get_contents($chemin), true);
+
+            $colonneArticle = collect($donnees['colonnes'] ?? [])
+                ->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
+
+            if (!$colonneArticle) {
+                continue;
+            }
+
+            $trouve = collect($donnees['lignes'] ?? [])
+                ->contains(fn ($l) => trim((string) ($l[$colonneArticle['key']] ?? '')) === trim($article));
+
+            if ($trouve) {
+                return redirect()->route('stockProduction.article', ['id' => $donnees['id'], 'article' => $article]);
+            }
+        }
+
+        abort(404, "Article \"{$article}\" introuvable dans les imports de stock disponibles.");
     }
 
     /** Compare des noms de colonnes en ignorant accents/espaces/tirets/casse (même logique que basestock.py). */

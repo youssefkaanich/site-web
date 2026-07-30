@@ -229,6 +229,14 @@ export function IconInbox({ className = '' }) {
     );
 }
 
+export function IconBox({ className = '' }) {
+    return (
+        <svg className={className} {...BASE}>
+            <path d="M3.75 8.25 12 4l8.25 4.25M3.75 8.25 12 12.5m-8.25-4.25v7.5L12 20l8.25-4.25v-7.5M12 12.5v7.5" {...TRAIT} />
+        </svg>
+    );
+}
+
 export function IconChevronLeft({ className = '' }) {
     return (
         <svg className={className} {...BASE}>
