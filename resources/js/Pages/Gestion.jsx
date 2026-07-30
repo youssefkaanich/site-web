@@ -47,6 +47,10 @@ const COLUMNS = [
 
 const ACTIONS_WIDTH = 150;
 
+// Au-delà de ce nombre de lignes, une suppression groupée demande de recopier
+// le nombre avant de valider (voir ConfirmDialog / saisieAttendue).
+const SEUIL_CONFIRMATION_MASSE = 20;
+
 // Colonnes affichées par défaut (les autres restent disponibles via "Colonnes ▾")
 // pour ne pas surcharger le tableau visuellement dès l'ouverture de la page.
 const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Objet', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Echeance_date', 'Urgent'];
@@ -641,6 +645,10 @@ export default function Gestion({
         setConfirmation({
             message: `Envoyer ${selection.length} commande(s) à la corbeille ? Tu pourras les restaurer depuis la corbeille.`,
             danger: true,
+            // Au-delà de SEUIL_CONFIRMATION_MASSE lignes, il faut recopier le
+            // nombre : évite de vider une vue entière d'un clic réflexe juste
+            // après avoir coché "tout sélectionner".
+            saisieAttendue: selection.length > SEUIL_CONFIRMATION_MASSE ? selection.length : null,
             onConfirm: () => {
                 setConfirmation(null);
                 router.post(
@@ -1166,6 +1174,7 @@ export default function Gestion({
                 open={Boolean(confirmation)}
                 message={confirmation?.message}
                 danger={confirmation?.danger}
+                saisieAttendue={confirmation?.saisieAttendue ?? null}
                 onConfirm={confirmation?.onConfirm}
                 onCancel={() => setConfirmation(null)}
             />

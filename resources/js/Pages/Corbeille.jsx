@@ -76,6 +76,9 @@ export default function Corbeille({ commandes = [] }) {
     function supprimerSelection() {
         setConfirmation({
             message: `Supprimer définitivement ${selection.length} commande(s) ? Cette action est irréversible.`,
+            // Ici la suppression est DÉFINITIVE (pas de filet de sécurité
+            // derrière) : on demande de recopier le nombre dès 10 lignes.
+            saisieAttendue: selection.length > 10 ? selection.length : null,
             onConfirm: () => {
                 setConfirmation(null);
                 router.post(
@@ -212,6 +215,7 @@ export default function Corbeille({ commandes = [] }) {
                 open={Boolean(confirmation)}
                 message={confirmation?.message}
                 danger
+                saisieAttendue={confirmation?.saisieAttendue ?? null}
                 onConfirm={confirmation?.onConfirm}
                 onCancel={() => setConfirmation(null)}
             />
