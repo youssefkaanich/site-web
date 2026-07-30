@@ -46,6 +46,12 @@ class CommandeController extends Controller
             $commandes = CommandeStore::nettoyerDoublons($commandes);
         }
 
+        // Codes article invalides masqués (filtre d'affichage, rien n'est
+        // supprimé en base) -- appliqué ici pour que les compteurs par groupe
+        // calculés plus bas comptent la même chose que ce que le tableau
+        // affiche réellement.
+        $commandes = self::filtrerArticlesValides($commandes);
+
         // Filtre par service AVANT l'envoi à React (pas juste côté front) :
         // même colonne `Job` que le filtre à onglets Export/Commercial déjà
         // en place, remplie à l'extraction (voir categorie_job() côté Python).
@@ -89,6 +95,29 @@ class CommandeController extends Controller
             'groupeValeur' => $groupeValeur,
             'groupes' => $groupes,
         ]);
+    }
+
+    /**
+     * Ne garde que les commandes dont le code article est valide (un "A" en
+     * 5e position), sauf celles extraites d'une image (OCR) qui passent
+     * toujours.
+     *
+     * ATTENTION : règle reproduite à l'identique côté React dans
+     * resources/js/utils/articleValidation.js — toute modification ici doit
+     * être reportée là-bas (même principe que normaliserLabel(), dupliqué
+     * entre basestock.py et StockController).
+     */
+    private static function filtrerArticlesValides(array $commandes): array
+    {
+        return array_values(array_filter($commandes, function (array $c) {
+            if (($c['Source'] ?? null) === 'image-ocr') {
+                return true;
+            }
+
+            $code = trim((string) ($c['Article'] ?? ''));
+
+            return strlen($code) >= 5 && strtoupper($code[4]) === 'A';
+        }));
     }
 
     public function store(Request $request)
@@ -173,7 +202,9 @@ class CommandeController extends Controller
     /** Tableau de bord : suivi des commandes Export/Commercial confrontées au stock réel. */
     public function analyse()
     {
-        $commandes = collect(CommandeStore::toutes());
+        // Même filtre d'affichage que la page Commandes, pour que les deux
+        // pages montrent exactement le même périmètre de commandes.
+        $commandes = collect(self::filtrerArticlesValides(CommandeStore::toutes()));
 
         // Suivi Export/Commercial : chaque commande confrontée au stock réel
         // de son article (rapprochement par nom d'article, comme la fiche

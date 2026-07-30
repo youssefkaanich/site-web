@@ -19,6 +19,7 @@ import {
     IconFileText,
     IconTerminal,
 } from '../Components/Icons';
+import { estArticleValide } from '../utils/articleValidation';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 import { toast } from '../hooks/toast';
 
@@ -488,10 +489,15 @@ export default function Gestion({
         return () => clearInterval(id);
     }, [extractionActive, showModal, celluleEdition]);
 
+    // Filtre d'affichage appliqué UNE SEULE FOIS ici (composant central,
+    // partagé par les 3 vues et leurs sous-pages) : les codes article invalides
+    // (voir estArticleValide) sont masqués partout, mais restent en base.
+    const commandesValides = commandes.filter((c) => estArticleValide(c.Article, c.Source));
+
     // Doublons masqués AVANT de calculer les compteurs des cartes stats : sinon
     // "Commandes"/"Urgentes"/... continuaient d'afficher le total brut même
     // quand le tableau en dessous montrait moins de lignes.
-    const baseListe = masquerDoublons ? masquerLesDoublons(commandes) : commandes;
+    const baseListe = masquerDoublons ? masquerLesDoublons(commandesValides) : commandesValides;
 
     const total = baseListe.length;
     const urgentes = baseListe.filter((c) => c.Urgent === 'OUI').length;
