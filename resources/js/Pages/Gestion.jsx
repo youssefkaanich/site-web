@@ -37,6 +37,8 @@ const COLUMNS = [
     { key: 'Qte_allouee', label: 'Qté allouée', width: 110, numeric: true },
     { key: 'Qte_a_allouer', label: 'Qté à allouer', width: 110, numeric: true },
     { key: 'Destination', label: 'Destination', width: 130 },
+    { key: 'Echeance', label: 'Échéance', width: 130 },
+    { key: 'Echeance_date', label: 'Date échéance', width: 140 },
     { key: 'Urgent', label: 'Urgent', width: 90 },
     { key: 'Note', label: 'Note', width: 160 },
 ];
@@ -45,7 +47,7 @@ const ACTIONS_WIDTH = 150;
 
 // Colonnes affichées par défaut (les autres restent disponibles via "Colonnes ▾")
 // pour ne pas surcharger le tableau visuellement dès l'ouverture de la page.
-const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Objet', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Urgent'];
+const COLONNES_PAR_DEFAUT = ['Date_mail', 'Emetteur', 'Job', 'Objet', 'Article', 'Designation', 'Qte_demandee', 'Destination', 'Echeance_date', 'Urgent'];
 const CLE_COLONNES_VISIBLES = 'sopal-commandes-colonnes-visibles';
 
 const EMPTY_FORM = {
