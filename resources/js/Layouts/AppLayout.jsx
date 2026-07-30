@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Toaster from '../Components/Toaster';
 import { IconSun, IconMoon } from '../Components/Icons';
+import { toast } from '../hooks/toast';
 
 function NavLink({ href, label, active, icon }) {
     return (
@@ -90,6 +91,14 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
     // Sidebar auto-masquée : se replie quand la souris s'en va, réapparaît en
     // approchant le bord gauche de l'écran (pas besoin de cliquer sur rien).
     const [sidebarOuverte, setSidebarOuverte] = useState(true);
+
+    // Message flash (redirect()->with('erreur'/'succes', ...) côté Laravel,
+    // voir HandleInertiaRequests::share()) affiché en toast une seule fois
+    // par visite -- ex: article introuvable dans le stock actuel.
+    useEffect(() => {
+        if (props.flash?.erreur) toast(props.flash.erreur, 'error');
+        if (props.flash?.succes) toast(props.flash.succes, 'success');
+    }, [props.flash?.erreur, props.flash?.succes]);
 
     function deconnexion() {
         router.post('/logout');

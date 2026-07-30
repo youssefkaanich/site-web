@@ -234,7 +234,11 @@ class StockController extends Controller
             }
         }
 
-        abort(404, "Article \"{$article}\" introuvable dans les imports de stock disponibles.");
+        // Cas courant (pas une vraie erreur) : beaucoup de commandes portent
+        // sur un article qui n'est pas (ou plus) dans le dernier import de
+        // stock -- on revient simplement en arrière avec un message clair au
+        // lieu d'une page 404 brute.
+        return redirect()->back()->with('erreur', "Article \"{$article}\" introuvable dans les imports de stock disponibles.");
     }
 
     /** Compare des noms de colonnes en ignorant accents/espaces/tirets/casse (même logique que basestock.py). */

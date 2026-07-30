@@ -42,6 +42,12 @@ class HandleInertiaRequests extends Middleware
                     ? ['name' => $request->user()->name, 'email' => $request->user()->email]
                     : null,
             ],
+            // Message flash affiché en toast (voir AppLayout.jsx) après une
+            // redirection -- ex: article introuvable dans le stock actuel.
+            'flash' => [
+                'succes' => $request->session()->get('succes'),
+                'erreur' => $request->session()->get('erreur'),
+            ],
         ];
     }
 }
