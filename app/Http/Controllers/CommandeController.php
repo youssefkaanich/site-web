@@ -170,47 +170,10 @@ class CommandeController extends Controller
         return redirect()->route('corbeille');
     }
 
-    /** Tableau de bord : statistiques et graphiques calculés à partir des commandes Firestore. */
+    /** Tableau de bord : suivi des commandes Export/Commercial confrontées au stock réel. */
     public function analyse()
     {
         $commandes = collect(CommandeStore::toutes());
-
-        $parSource = $commandes
-            ->groupBy(fn (array $c) => $c['Source'] ?? 'Inconnu')
-            ->map->count()
-            ->sortDesc();
-
-        $parJour = collect();
-        for ($i = 13; $i >= 0; $i--) {
-            $parJour[now()->subDays($i)->format('Y-m-d')] = 0;
-        }
-        foreach ($commandes as $c) {
-            if (empty($c['Date_mail'])) {
-                continue;
-            }
-            try {
-                $jour = \Carbon\Carbon::parse($c['Date_mail'])->format('Y-m-d');
-            } catch (\Exception $e) {
-                continue;
-            }
-            if ($parJour->has($jour)) {
-                $parJour[$jour] = $parJour[$jour] + 1;
-            }
-        }
-
-        $topArticles = $commandes
-            ->filter(fn (array $c) => !empty($c['Article']))
-            ->groupBy('Article')
-            ->map->count()
-            ->sortDesc()
-            ->take(5);
-
-        $topDestinations = $commandes
-            ->filter(fn (array $c) => !empty($c['Destination']))
-            ->groupBy('Destination')
-            ->map->count()
-            ->sortDesc()
-            ->take(5);
 
         // Suivi Export/Commercial : chaque commande confrontée au stock réel
         // de son article (rapprochement par nom d'article, comme la fiche
@@ -234,6 +197,8 @@ class CommandeController extends Controller
                     'Urgent' => $c['Urgent'],
                     'Note' => $c['Note'],
                     'Qte_demandee' => $c['Qte_demandee'],
+                    'Reste_a_livrer' => $c['Reste_a_livrer'],
+                    'Qte_en_rupture' => $c['Qte_en_rupture'],
                     'qteStock' => $enStock,
                     'suffisant' => $demandee === null ? null : $enStock >= $demandee,
                 ];
@@ -243,10 +208,6 @@ class CommandeController extends Controller
         return \Inertia\Inertia::render('Analyse', [
             'total' => $commandes->count(),
             'urgentes' => $commandes->where('Urgent', 'OUI')->count(),
-            'parSource' => $parSource,
-            'parJour' => $parJour,
-            'topArticles' => $topArticles,
-            'topDestinations' => $topDestinations,
             'suivi' => $suivi,
             'stockSource' => [
                 'nomFichier' => $stock['nomFichier'],
