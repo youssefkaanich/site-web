@@ -27,16 +27,18 @@ Route::middleware('auth')->group(function () {
         ->defaults('service', 'Export')
         ->defaults('categorie', 'export')
         ->defaults('groupeChamp', 'Objet');
+    // Chantier porte des commandes Commercial : groupées par émetteur, comme
+    // la vue Commercial (et non par objet comme le reste de Commande ferme).
     Route::get('/commandes/export/chantier', [CommandeController::class, 'index'])->name('gestion.chantier')
         ->defaults('service', 'Export')
         ->defaults('categorie', 'chantier')
-        ->defaults('groupeChamp', 'Objet');
-    Route::get('/commandes/export/chantier/objet/{groupeValeur}', [CommandeController::class, 'index'])
+        ->defaults('groupeChamp', 'Emetteur');
+    Route::get('/commandes/export/chantier/emetteur/{groupeValeur}', [CommandeController::class, 'index'])
         ->where('groupeValeur', '[^/]+')
         ->name('gestion.chantier.groupe')
         ->defaults('service', 'Export')
         ->defaults('categorie', 'chantier')
-        ->defaults('groupeChamp', 'Objet');
+        ->defaults('groupeChamp', 'Emetteur');
     Route::post('/commandes/export/supprimer-doublons', [CommandeController::class, 'supprimerDoublons'])
         ->name('commandes.supprimerDoublons')
         ->defaults('service', 'Export');
