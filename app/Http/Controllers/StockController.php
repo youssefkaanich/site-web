@@ -235,10 +235,25 @@ class StockController extends Controller
         }
 
         // Cas courant (pas une vraie erreur) : beaucoup de commandes portent
-        // sur un article qui n'est pas (ou plus) dans le dernier import de
-        // stock -- on revient simplement en arrière avec un message clair au
-        // lieu d'une page 404 brute.
-        return redirect()->back()->with('erreur', "Article \"{$article}\" introuvable dans les imports de stock disponibles.");
+        // sur un article absent du dernier import de stock -- on affiche
+        // quand même la fiche article, avec une quantité de 0 (au lieu d'une
+        // page 404/message d'erreur), les commandes liées restant utiles à voir.
+        $commandesLiees = collect(CommandeStore::toutes())
+            ->filter(fn (array $c) => trim((string) ($c['Article'] ?? '')) === trim($article))
+            ->values()
+            ->all();
+
+        return \Inertia\Inertia::render('StockArticleDetail', [
+            'idImport' => null,
+            'article' => $article,
+            'nomFichier' => null,
+            'titreStock' => null,
+            'colonnes' => [],
+            'colonneArticleKey' => null,
+            'lignes' => [],
+            'commandesLiees' => $commandesLiees,
+            'nonTrouveEnStock' => true,
+        ]);
     }
 
     /** Compare des noms de colonnes en ignorant accents/espaces/tirets/casse (même logique que basestock.py). */

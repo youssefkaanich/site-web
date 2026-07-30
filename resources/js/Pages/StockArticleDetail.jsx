@@ -11,16 +11,30 @@ const ONGLETS = [
     { key: 'commandes', label: 'Commandes liées' },
 ];
 
-export default function StockArticleDetail({ idImport, article, nomFichier, titreStock, colonnes, colonneArticleKey, lignes, commandesLiees = [] }) {
+export default function StockArticleDetail({
+    idImport,
+    article,
+    nomFichier,
+    titreStock,
+    colonnes,
+    colonneArticleKey,
+    lignes,
+    commandesLiees = [],
+    nonTrouveEnStock = false,
+}) {
     const [ongletActif, setOngletActif] = useState('infos');
 
     const colonneDesignation = trouverColonne(colonnes, 'designation');
     const colonneQte = trouverColonne(colonnes, 'qte') || trouverColonne(colonnes, 'quantite');
 
     const designation = colonneDesignation ? lignes[0]?.[colonneDesignation.key] : null;
-    const quantiteTotale = colonneQte
-        ? lignes.reduce((total, ligne) => total + (Number(ligne[colonneQte.key]) || 0), 0)
-        : null;
+    // Article absent du dernier import de stock -> quantité 0 explicite (pas
+    // "on ne sait pas") : c'est un cas courant, pas une erreur.
+    const quantiteTotale = nonTrouveEnStock
+        ? 0
+        : colonneQte
+            ? lignes.reduce((total, ligne) => total + (Number(ligne[colonneQte.key]) || 0), 0)
+            : null;
 
     // Colonnes affichées dans l'onglet "Emplacements" : tout sauf le code article (déjà dans le titre).
     const colonnesEmplacements = colonnes.filter((c) => c.key !== colonneArticleKey);
@@ -37,7 +51,7 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
     return (
         <AppLayout title={`Article ${article}`} subtitle={designation || undefined}>
             <Link
-                href={`/stock-production?import=${idImport}`}
+                href={idImport ? `/stock-production?import=${idImport}` : '/stock-production'}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0d2b52] dark:text-blue-300 hover:underline mb-5"
             >
                 <IconChevronLeft className="h-4 w-4" /> Retour à Stock / Production
@@ -48,7 +62,9 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
                 <p className="text-2xl font-extrabold text-[#0d2b52] dark:text-white mt-1">{article}</p>
                 {designation && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{designation}</p>}
                 <p className="text-xs text-gray-400 dark:text-gray-600 mt-3">
-                    Source : {nomFichier} {titreStock ? `· ${titreStock}` : ''}
+                    {nonTrouveEnStock
+                        ? "Absent du dernier import de stock -- quantité considérée comme 0."
+                        : `Source : ${nomFichier} ${titreStock ? `· ${titreStock}` : ''}`}
                 </p>
             </div>
 
@@ -108,6 +124,12 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
 
             {/* Onglet : Emplacements */}
             {ongletActif === 'emplacements' && (
+                nonTrouveEnStock ? (
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-dashed border-gray-300 dark:border-gray-700 px-4 py-16 text-center">
+                        <IconInbox className="h-10 w-10 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
+                        <p className="text-gray-500 dark:text-gray-400 font-semibold">Aucun emplacement -- article absent du stock actuel.</p>
+                    </div>
+                ) : (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm border-collapse">
@@ -149,6 +171,7 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
                         </table>
                     </div>
                 </div>
+                )
             )}
 
             {/* Onglet : Commandes liées (même Article, rapprochement par nom -- voir StockController::article()) */}
@@ -165,7 +188,8 @@ export default function StockArticleDetail({ idImport, article, nomFichier, titr
                             <table className="w-full text-sm border-collapse">
                                 <thead>
                                     <tr className="text-left text-gray-500 dark:text-gray-400">
-                                        {['Date mail', 'Émetteur', 'Job', 'Désignation', 'Qté demandée', 'Destination', 'Urgent'].map((label) => (
+
+
                                             <th
                                                 key={label}
                                                 className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 last:border-r-0"
