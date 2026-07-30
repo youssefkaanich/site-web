@@ -24,20 +24,47 @@ class CommandeStore
 
     // ---------- Lecture ----------
 
-    /** @return array<int, array> Commandes non supprimées, l'id le plus grand (la plus récente) en premier. */
+    /** @return array<int, array> Commandes non supprimées, triées par Date_mail la plus récente en premier. */
     public static function toutes(): array
     {
-        return Commande::orderByDesc('id')->get()->toArray();
+        return self::trierParDateMail(Commande::orderByDesc('id')->get()->toArray());
     }
 
-    /** @return array<int, array> Commandes envoyées à la corbeille, les plus récemment supprimées d'abord. */
+    /** @return array<int, array> Commandes envoyées à la corbeille, triées par Date_mail la plus récente en premier. */
     public static function corbeille(): array
     {
-        return Commande::onlyTrashed()
-            ->orderByDesc('deleted_at')
-            ->orderByDesc('id')
-            ->get()
-            ->toArray();
+        return self::trierParDateMail(
+            Commande::onlyTrashed()->orderByDesc('id')->get()->toArray()
+        );
+    }
+
+    /**
+     * Trie par Date_mail décroissant (la plus récente en haut), en tiebreak
+     * sur l'id décroissant si la date est égale/absente/invalide. Date_mail
+     * vient soit de Gmail (en-tête RFC 2822) soit d'Outlook (str(datetime)
+     * Python) -- deux formats différents mais tous deux lisibles nativement
+     * par DateTime, donc pas besoin de normaliser la chaîne comme côté JS.
+     */
+    private static function trierParDateMail(array $commandes): array
+    {
+        $horodatage = function (array $c): int {
+            if (empty($c['Date_mail'])) {
+                return 0;
+            }
+            try {
+                return (new \DateTime($c['Date_mail']))->getTimestamp();
+            } catch (\Exception $e) {
+                return 0;
+            }
+        };
+
+        usort($commandes, function (array $a, array $b) use ($horodatage) {
+            $diff = $horodatage($b) <=> $horodatage($a);
+
+            return $diff !== 0 ? $diff : ($b['id'] <=> $a['id']);
+        });
+
+        return $commandes;
     }
 
     public static function trouver(string $id): ?array
