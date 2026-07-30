@@ -25,3 +25,29 @@ export function estChantier(objet, texte) {
 
     return /chantier/i.test(contenu);
 }
+
+/**
+ * Périmètre de chaque vue du site. La catégorie porte à la fois le service et
+ * le type de commande :
+ *
+ *   Commande ferme > Export   -> tout le service Export
+ *   Commande ferme > Chantier -> les commandes Commercial parlant de chantier
+ *   Commercial                -> les commandes Commercial hors chantier
+ *
+ * Les 3 vues sont donc mutuellement exclusives et couvrent toutes les
+ * commandes (une commande Export ne va jamais dans Chantier).
+ */
+export function correspondACategorie(commande, categorie) {
+    const chantier = estChantier(commande.Objet, commande.Texte_Mail);
+
+    switch (categorie) {
+        case 'export':
+            return commande.Job === 'Export';
+        case 'chantier':
+            return commande.Job === 'Commercial' && chantier;
+        case 'commercial':
+            return commande.Job === 'Commercial' && !chantier;
+        default:
+            return true;
+    }
+}

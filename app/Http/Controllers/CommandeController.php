@@ -53,37 +53,23 @@ class CommandeController extends Controller
         // affiche réellement.
         $commandes = self::filtrerArticlesValides($commandes);
 
-        // Filtre par service AVANT l'envoi à React (pas juste côté front) :
-        // même colonne `Job` que le filtre à onglets Export/Commercial déjà
-        // en place, remplie à l'extraction (voir categorie_job() côté Python).
-        if ($service !== null) {
-            $commandes = array_values(array_filter(
-                $commandes,
-                fn (array $c) => ($c['Job'] ?? null) === $service
-            ));
-        }
+        // Compteurs des 2 sous-onglets de "Commande ferme", calculés sur la
+        // liste COMPLÈTE (avant le filtre de vue) pour que chaque onglet
+        // affiche son propre total quel que soit celui qui est actif.
+        $sousOnglets = $service === 'Export'
+            ? [
+                'export' => count(array_filter($commandes, fn (array $c) => self::correspondACategorie($c, 'export'))),
+                'chantier' => count(array_filter($commandes, fn (array $c) => self::correspondACategorie($c, 'chantier'))),
+            ]
+            : null;
 
-        // Sous-onglets de "Commande ferme" (service Export uniquement) :
-        // export = tout ce qui n'est PAS chantier, chantier = le reste. Les
-        // deux sont exclusifs par construction (même test, branche opposée).
-        // Compteurs des 2 onglets calculés AVANT le filtre, pour que chaque
-        // onglet affiche son propre total quel que soit celui qui est actif.
-        $sousOnglets = null;
+        // Filtre de la vue courante AVANT l'envoi à React (pas juste côté
+        // front) : la catégorie porte à la fois le service et le type de
+        // commande (voir correspondACategorie).
         if ($categorie !== null) {
-            // Clé du sous-onglet "hors chantier" : elle porte le nom du
-            // service ('export' ou 'commercial'), l'autre est toujours
-            // 'chantier' (voir SOUS_ONGLETS_PAR_SERVICE côté React).
-            $cleHorsChantier = $service === 'Commercial' ? 'commercial' : 'export';
-
-            $nbChantier = count(array_filter($commandes, fn (array $c) => self::estChantier($c)));
-            $sousOnglets = [
-                $cleHorsChantier => count($commandes) - $nbChantier,
-                'chantier' => $nbChantier,
-            ];
-
             $commandes = array_values(array_filter(
                 $commandes,
-                fn (array $c) => self::estChantier($c) === ($categorie === 'chantier')
+                fn (array $c) => self::correspondACategorie($c, $categorie)
             ));
         }
 
@@ -139,6 +125,31 @@ class CommandeController extends Controller
 
         // //u : traite la chaîne en UTF-8 (accents), //i : insensible à la casse
         return (bool) preg_match('/chantier/iu', $contenu);
+    }
+
+    /**
+     * Périmètre de chaque vue. La catégorie porte à la fois le service et le
+     * type de commande :
+     *   'export'     -> tout le service Export
+     *   'chantier'   -> les commandes Commercial parlant de chantier
+     *   'commercial' -> les commandes Commercial hors chantier
+     *
+     * Les 3 vues sont exclusives et couvrent tout : une commande Export ne
+     * part jamais dans Chantier.
+     *
+     * ATTENTION : règle reproduite à l'identique côté React dans
+     * resources/js/utils/classificationCommande.js.
+     */
+    private static function correspondACategorie(array $c, ?string $categorie): bool
+    {
+        $job = $c['Job'] ?? null;
+
+        return match ($categorie) {
+            'export' => $job === 'Export',
+            'chantier' => $job === 'Commercial' && self::estChantier($c),
+            'commercial' => $job === 'Commercial' && !self::estChantier($c),
+            default => true,
+        };
     }
 
     /**
@@ -208,11 +219,13 @@ class CommandeController extends Controller
     {
         $categorie = $request->input('categorie'); // null | 'export' | 'chantier'
 
-        $filtre = in_array($categorie, ['export', 'chantier'], true)
-            ? fn (array $c) => self::estChantier($c) === ($categorie === 'chantier')
+        $filtre = in_array($categorie, ['export', 'chantier', 'commercial'], true)
+            ? fn (array $c) => self::correspondACategorie($c, $categorie)
             : null;
 
-        CommandeStore::supprimerDoublons($request->route('service'), $filtre);
+        // Le service n'est plus discriminant : la catégorie porte déjà le
+        // périmètre complet (Chantier = des commandes Commercial).
+        CommandeStore::supprimerDoublons(null, $filtre);
 
         return redirect()->back();
     }

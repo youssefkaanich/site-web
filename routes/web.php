@@ -40,8 +40,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/commandes/export/supprimer-doublons', [CommandeController::class, 'supprimerDoublons'])
         ->name('commandes.supprimerDoublons')
         ->defaults('service', 'Export');
-    // Commercial subdivisé de la même façon : commercial (hors chantier) /
-    // chantier, avec la même règle estChantier().
+    // Commercial = uniquement les commandes Commercial HORS chantier (celles
+    // qui parlent de chantier sont dans Commande ferme > Chantier).
     Route::get('/commandes/commercial', [CommandeController::class, 'index'])->name('gestion.commercial')
         ->defaults('service', 'Commercial')
         ->defaults('categorie', 'commercial')
@@ -51,16 +51,6 @@ Route::middleware('auth')->group(function () {
         ->name('gestion.commercial.groupe')
         ->defaults('service', 'Commercial')
         ->defaults('categorie', 'commercial')
-        ->defaults('groupeChamp', 'Emetteur');
-    Route::get('/commandes/commercial/chantier', [CommandeController::class, 'index'])->name('gestion.commercial.chantier')
-        ->defaults('service', 'Commercial')
-        ->defaults('categorie', 'chantier')
-        ->defaults('groupeChamp', 'Emetteur');
-    Route::get('/commandes/commercial/chantier/emetteur/{groupeValeur}', [CommandeController::class, 'index'])
-        ->where('groupeValeur', '[^/]+')
-        ->name('gestion.commercial.chantier.groupe')
-        ->defaults('service', 'Commercial')
-        ->defaults('categorie', 'chantier')
         ->defaults('groupeChamp', 'Emetteur');
     Route::get('/stock-production', [StockController::class, 'page'])->name('stockProduction');
     Route::post('/stock-production/importer', [StockController::class, 'importer'])->name('stockProduction.importer');

@@ -20,7 +20,7 @@ import {
     IconTerminal,
 } from '../Components/Icons';
 import { estArticleValide } from '../utils/articleValidation';
-import { estChantier } from '../utils/classificationCommande';
+import { correspondACategorie } from '../utils/classificationCommande';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 import { toast } from '../hooks/toast';
 
@@ -158,15 +158,14 @@ const VUES_SERVICE = [
     { service: 'Commercial', label: 'Commercial', href: '/commandes/commercial', Icone: IconBriefcase, couleur: COULEUR_COMMERCIAL },
 ];
 
-/** Sous-onglets par service : 2 onglets exclusifs, "hors chantier" et "chantier" (voir estChantier). */
+// Sous-onglets de "Commande ferme" : Export = tout le service Export ;
+// Chantier = les commandes Commercial parlant de chantier (voir
+// correspondACategorie). L'onglet Commercial n'a pas de sous-onglets : il ne
+// montre que le Commercial hors chantier.
 const SOUS_ONGLETS_PAR_SERVICE = {
     Export: [
         { categorie: 'export', label: 'Export', href: '/commandes/export' },
         { categorie: 'chantier', label: 'Chantier', href: '/commandes/export/chantier' },
-    ],
-    Commercial: [
-        { categorie: 'commercial', label: 'Commercial', href: '/commandes/commercial' },
-        { categorie: 'chantier', label: 'Chantier', href: '/commandes/commercial/chantier' },
     ],
 };
 
@@ -575,12 +574,10 @@ export default function Gestion({
     // (voir estArticleValide) sont masqués partout, mais restent en base.
     let commandesValides = commandes.filter((c) => estArticleValide(c.Article, c.Source));
 
-    // Garde-fou : le tri Export/Chantier est déjà fait côté serveur, on le
-    // rejoue ici pour garantir l'exclusivité des 2 sous-onglets à l'affichage.
+    // Garde-fou : le périmètre de la vue est déjà appliqué côté serveur, on le
+    // rejoue ici pour garantir l'exclusivité des vues à l'affichage.
     if (categorie !== null) {
-        commandesValides = commandesValides.filter(
-            (c) => estChantier(c.Objet, c.Texte_Mail) === (categorie === 'chantier')
-        );
+        commandesValides = commandesValides.filter((c) => correspondACategorie(c, categorie));
     }
 
     // Doublons masqués AVANT de calculer les compteurs des cartes stats : sinon
