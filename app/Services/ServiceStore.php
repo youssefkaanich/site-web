@@ -175,32 +175,41 @@ class ServiceStore
     }
 
     /**
-     * Reste à livrer d'une commande : quantité demandée − total déjà servi.
-     * null si la quantité demandée n'est pas renseignée (majorité des
-     * commandes extraites) : dans ce cas, aucun plafond n'est appliqué et la
-     * commande ne peut être archivée que via "Marquer comme servie".
+     * Quantité à servir au total pour une commande : Qte_demandee, et à
+     * défaut Reste_a_livrer (souvent la seule renseignée sur les commandes
+     * extraites d'un mail : 24 commandes sur 170 ont Qte_demandee, 62 ont
+     * Reste_a_livrer). null si aucune des deux n'est exploitable : dans ce
+     * cas aucun plafond n'est appliqué et la commande ne peut être archivée
+     * que via "Marquer comme servie".
      */
+    public static function quantiteAServir(Commande $commande): ?float
+    {
+        return self::nombreOuNull($commande->Qte_demandee)
+            ?? self::nombreOuNull($commande->Reste_a_livrer);
+    }
+
+    /** Reste à livrer = quantité à servir − total déjà servi. null si la quantité est inconnue. */
     public static function resteALivrer(Commande $commande): ?float
     {
-        $demandee = self::nombreOuNull($commande->Qte_demandee);
-        if ($demandee === null) {
+        $aServir = self::quantiteAServir($commande);
+        if ($aServir === null) {
             return null;
         }
 
         $servi = self::servisParCommande([$commande->id])[$commande->id] ?? 0.0;
 
-        return max(0.0, $demandee - $servi);
+        return max(0.0, $aServir - $servi);
     }
 
     /** Recalcule le statut d'après le total servi (en attente / partiellement servie / servie). */
     private static function rafraichirStatut(Commande $commande): void
     {
         $servi = self::servisParCommande([$commande->id])[$commande->id] ?? 0.0;
-        $demandee = self::nombreOuNull($commande->Qte_demandee);
+        $aServir = self::quantiteAServir($commande);
 
         $statut = match (true) {
             $servi <= 0 => self::EN_ATTENTE,
-            $demandee !== null && $servi >= $demandee => self::SERVIE,
+            $aServir !== null && $servi >= $aServir => self::SERVIE,
             default => self::PARTIELLE,
         };
 

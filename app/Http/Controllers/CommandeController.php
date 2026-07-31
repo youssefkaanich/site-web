@@ -290,9 +290,12 @@ class CommandeController extends Controller
                 // commandes : servir l'une baisse le disponible de l'autre.
                 $enStock = ($stock['quantites'][$article] ?? 0) - ($servisArticle[$article] ?? 0);
 
-                $demandee = ServiceStore::nombreOuNull($c['Qte_demandee'] ?? null);
+                // Quantité de référence : Qte_demandee, à défaut Reste_a_livrer
+                // (seule renseignée sur beaucoup de commandes extraites).
+                $aServir = ServiceStore::nombreOuNull($c['Qte_demandee'] ?? null)
+                    ?? ServiceStore::nombreOuNull($c['Reste_a_livrer'] ?? null);
                 $servi = $servisCommande[$c['id']] ?? 0.0;
-                $reste = $demandee === null ? null : max(0.0, $demandee - $servi);
+                $reste = $aServir === null ? null : max(0.0, $aServir - $servi);
 
                 return [
                     'id' => $c['id'],
@@ -312,7 +315,7 @@ class CommandeController extends Controller
                     'qteStock' => $enStock,
                     'totalServi' => $servi,
                     'services' => $historique[$c['id']] ?? [],
-                    'suffisant' => $demandee === null ? null : $enStock >= $reste,
+                    'suffisant' => $aServir === null ? null : $enStock >= $reste,
                 ];
             })
             ->values();
