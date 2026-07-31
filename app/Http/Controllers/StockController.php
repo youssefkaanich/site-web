@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Service;
 use App\Services\CommandeStore;
 use App\Support\ArticleSopal;
 use Illuminate\Http\Request;
@@ -202,6 +203,14 @@ class StockController extends Controller
             ->values()
             ->all();
 
+        // Quantité déjà sortie du stock via la page Analyse, pour CET import
+        // (les services d'un import précédent ne comptent plus, voir
+        // ServiceStore). Le fichier n'est pas modifié : on affiche à côté la
+        // quantité du fichier, ce qui a été servi, et le disponible réel.
+        $servie = (float) Service::where('Article', $article)
+            ->where('import_id', $id)
+            ->sum('quantite');
+
         return \Inertia\Inertia::render('StockArticleDetail', [
             'idImport' => $id,
             'article' => $article,
@@ -211,6 +220,7 @@ class StockController extends Controller
             'colonneArticleKey' => $colonneArticle['key'],
             'lignes' => $lignesArticle,
             'commandesLiees' => $commandesLiees,
+            'qteServie' => $servie,
         ]);
     }
 

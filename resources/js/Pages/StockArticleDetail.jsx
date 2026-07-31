@@ -21,6 +21,7 @@ export default function StockArticleDetail({
     lignes,
     commandesLiees = [],
     nonTrouveEnStock = false,
+    qteServie = 0,
 }) {
     const [ongletActif, setOngletActif] = useState('infos');
 
@@ -30,11 +31,17 @@ export default function StockArticleDetail({
     const designation = colonneDesignation ? lignes[0]?.[colonneDesignation.key] : null;
     // Article absent du dernier import de stock -> quantité 0 explicite (pas
     // "on ne sait pas") : c'est un cas courant, pas une erreur.
-    const quantiteTotale = nonTrouveEnStock
+    // Quantité brute du fichier importé (jamais modifiée).
+    const quantiteFichier = nonTrouveEnStock
         ? 0
         : colonneQte
             ? lignes.reduce((total, ligne) => total + (Number(ligne[colonneQte.key]) || 0), 0)
             : null;
+
+    // Quantité réellement disponible = fichier − ce qui a déjà été servi
+    // depuis la page Analyse (voir ServiceStore). Même calcul que là-bas,
+    // sinon les deux pages afficheraient des chiffres différents.
+    const quantiteTotale = quantiteFichier === null ? null : quantiteFichier - qteServie;
 
     // Colonnes affichées dans l'onglet "Emplacements" : tout sauf le code article (déjà dans le titre).
     const colonnesEmplacements = colonnes.filter((c) => c.key !== colonneArticleKey);
@@ -97,8 +104,15 @@ export default function StockArticleDetail({
                     </div>
                     {quantiteTotale !== null && (
                         <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm">
-                            <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Quantité totale</p>
+                            <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                {qteServie > 0 ? 'Quantité disponible' : 'Quantité totale'}
+                            </p>
                             <p className="text-4xl font-extrabold mt-2 text-[#0d2b52] dark:text-white">{quantiteTotale}</p>
+                            {qteServie > 0 && (
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                                    {quantiteFichier} au fichier − {qteServie} déjà servi(s)
+                                </p>
+                            )}
                         </div>
                     )}
                     {colonnesCommunes.length > 0 && (

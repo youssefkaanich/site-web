@@ -43,6 +43,17 @@ function CelluleService({ ligne }) {
         : Number(ligne.Reste_a_livrer);
     const maximum = reste === null ? ligne.qteStock : Math.min(reste, ligne.qteStock);
 
+    // Rien à servir : soit le stock est épuisé, soit la commande est déjà
+    // entièrement servie. On désactive plutôt que de laisser cliquer pour
+    // afficher une erreur -- et on dit laquelle des deux raisons s'applique.
+    const rienAServir = maximum <= 0;
+    const motifBlocage = ligne.qteStock <= 0 ? 'Stock épuisé' : 'Déjà servi';
+
+    // Le bouton reste inactif tant que la saisie est vide ou invalide : c'est
+    // ce qui provoquait le message "Saisis une quantité supérieure à 0".
+    const valeurSaisie = Number(String(quantite).replace(',', '.'));
+    const saisieValide = quantite !== '' && Number.isFinite(valeurSaisie) && valeurSaisie > 0;
+
     function servir() {
         const valeur = Number(String(quantite).replace(',', '.'));
 
@@ -85,15 +96,21 @@ function CelluleService({ ligne }) {
                     value={quantite}
                     onChange={(e) => setQuantite(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && servir()}
-                    disabled={envoi || ligne.qteStock <= 0}
-                    placeholder={ligne.qteStock <= 0 ? 'Stock épuisé' : `max ${maximum}`}
+                    disabled={envoi || rienAServir}
+                    placeholder={rienAServir ? motifBlocage : `max ${maximum}`}
                     className="w-24 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white px-2.5 py-1.5 text-sm outline-none focus:border-[#0d2b52] dark:focus:border-blue-400 focus:ring-2 focus:ring-[#0d2b52]/15 disabled:opacity-50"
                 />
                 <button
                     type="button"
                     onClick={servir}
-                    disabled={envoi || ligne.qteStock <= 0}
-                    title="Enregistrer cette sortie de stock"
+                    disabled={envoi || rienAServir || !saisieValide}
+                    title={
+                        rienAServir
+                            ? motifBlocage
+                            : !saisieValide
+                                ? 'Saisis d\'abord une quantité'
+                                : 'Enregistrer cette sortie de stock'
+                    }
                     className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     {envoi ? <IconLoader className="h-3.5 w-3.5 animate-spin" /> : <IconCheck className="h-3.5 w-3.5" />}
@@ -101,9 +118,11 @@ function CelluleService({ ligne }) {
                 </button>
             </div>
 
-            {/* Sans quantité demandée, "reste à livrer = 0" ne sera jamais
-                atteint : seul ce bouton permet d'archiver la commande. */}
-            {reste === null && (
+            {/* Sans quantité connue, "reste à livrer = 0" ne sera jamais
+                atteint : seul ce bouton permet d'archiver la commande. Proposé
+                aussi quand le reste est à 0 (commande remise en cours depuis
+                "Commandes servies"), sinon elle resterait bloquée ici. */}
+            {(reste === null || reste === 0) && (
                 <button
                     type="button"
                     onClick={marquerServie}
