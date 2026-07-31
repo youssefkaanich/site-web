@@ -3,6 +3,9 @@ import { router } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 import { toast } from '../hooks/toast';
 
+/** Libellé des lignes sans émetteur dans le filtre (même convention que Gestion.jsx). */
+const EMETTEUR_VIDE = '(non renseigné)';
+
 function CarteStat({ label, value, accent }) {
     return (
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm">
@@ -24,8 +27,41 @@ function TableauSuivi({ suivi, stockSource }) {
     const [service, setService] = useState('Export');
     const [notes, setNotes] = useState({});
     const [enregistrement, setEnregistrement] = useState(null);
+    // Filtre par émetteur : liste vide = tous affichés.
+    const [emetteurs, setEmetteurs] = useState([]);
 
-    const lignes = suivi.filter((s) => s.Job === service);
+    const lignesDuService = suivi.filter((s) => s.Job === service);
+
+    // Émetteurs proposés, calculés AVANT le filtre : sinon la liste se
+    // réduirait à mesure qu'on coche et on ne pourrait plus rien décocher.
+    const emetteursDisponibles = (() => {
+        const compteurs = new Map();
+        for (const l of lignesDuService) {
+            const cle = (l.Emetteur || '').trim() || EMETTEUR_VIDE;
+            compteurs.set(cle, (compteurs.get(cle) || 0) + 1);
+        }
+        return [...compteurs.entries()]
+            .map(([valeur, nombre]) => ({ valeur, nombre }))
+            .sort((a, b) => b.nombre - a.nombre);
+    })();
+
+    const lignes =
+        emetteurs.length === 0
+            ? lignesDuService
+            : lignesDuService.filter((l) => emetteurs.includes((l.Emetteur || '').trim() || EMETTEUR_VIDE));
+
+    function basculerEmetteur(valeur) {
+        setEmetteurs((actuels) =>
+            actuels.includes(valeur) ? actuels.filter((v) => v !== valeur) : [...actuels, valeur]
+        );
+    }
+
+    // Changer de service remet le filtre à zéro : les émetteurs d'un service
+    // n'ont aucune raison d'exister dans l'autre.
+    function changerService(s) {
+        setService(s);
+        setEmetteurs([]);
+    }
 
     function enregistrerNote(ligne) {
         const valeur = notes[ligne.id];
@@ -55,7 +91,7 @@ function TableauSuivi({ suivi, stockSource }) {
                     {['Export', 'Commercial'].map((s) => (
                         <button
                             key={s}
-                            onClick={() => setService(s)}
+                            onClick={() => changerService(s)}
                             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
                                 service === s
                                     ? `bg-white dark:bg-gray-900 shadow-sm ${
@@ -71,6 +107,49 @@ function TableauSuivi({ suivi, stockSource }) {
                     ))}
                 </div>
             </div>
+
+            {/* Filtre par émetteur : pastilles toujours visibles (plutôt qu'un
+                menu déroulant caché), pour voir d'un coup d'œil qui a commandé
+                quoi et combien. Plusieurs pastilles peuvent être actives. */}
+            {emetteursDisponibles.length > 0 && (
+                <div className="px-5 pb-3 flex flex-wrap items-center gap-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mr-1">
+                        Émetteur :
+                    </span>
+                    <button
+                        onClick={() => setEmetteurs([])}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                            emetteurs.length === 0
+                                ? 'text-white bg-[#0d2b52] border-[#0d2b52] dark:bg-blue-600 dark:border-blue-600'
+                                : 'text-gray-600 bg-white border-gray-300 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        Tous ({lignesDuService.length})
+                    </button>
+                    {emetteursDisponibles.map((e) => {
+                        const actif = emetteurs.includes(e.valeur);
+                        return (
+                            <button
+                                key={e.valeur}
+                                onClick={() => basculerEmetteur(e.valeur)}
+                                title={actif ? 'Cliquer pour retirer ce filtre' : 'Cliquer pour filtrer sur cet émetteur'}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                    actif
+                                        ? 'text-white bg-[#0d2b52] border-[#0d2b52] dark:bg-blue-600 dark:border-blue-600'
+                                        : 'text-gray-600 bg-white border-gray-300 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700'
+                                }`}
+                            >
+                                {e.valeur} ({e.nombre})
+                            </button>
+                        );
+                    })}
+                    {emetteurs.length > 0 && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                            {lignes.length} ligne(s) affichée(s)
+                        </span>
+                    )}
+                </div>
+            )}
 
             <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse">
@@ -162,7 +241,9 @@ function TableauSuivi({ suivi, stockSource }) {
                         {lignes.length === 0 && (
                             <tr>
                                 <td colSpan={8} className="px-4 py-10 text-center text-gray-400 dark:text-gray-600">
-                                    Aucune commande {service}.
+                                    {emetteurs.length > 0
+                                        ? `Aucune commande ${service} pour cet émetteur.`
+                                        : `Aucune commande ${service}.`}
                                 </td>
                             </tr>
                         )}
