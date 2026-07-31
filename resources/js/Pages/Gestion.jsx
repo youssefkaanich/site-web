@@ -18,8 +18,8 @@ import {
     IconImage,
     IconFileText,
     IconTerminal,
-    IconFiltre,
 } from '../Components/Icons';
+import FiltreColonne, { valeursDistinctes } from '../Components/FiltreColonne';
 import { estArticleValide } from '../utils/articleValidation';
 import { correspondACategorie } from '../utils/classificationCommande';
 import { useResizableColumns } from '../hooks/useResizableColumns';
@@ -491,53 +491,6 @@ export default function Gestion({
     // Filtre par émetteur (menu déroulant dans l'en-tête de la colonne).
     // Tableau vide = aucun filtre, donc tous les émetteurs sont affichés.
     const [filtreEmetteurs, setFiltreEmetteurs] = useState([]);
-    const [menuEmetteurOuvert, setMenuEmetteurOuvert] = useState(false);
-    const menuEmetteurRef = useRef(null);
-    const boutonFiltreRef = useRef(null);
-    // Le menu est en position fixe : l'en-tête du tableau est tronqué
-    // (truncate) et le tableau défile (overflow-auto), un menu en position
-    // absolue y serait coupé. On calcule donc sa position à l'ouverture.
-    const [positionMenu, setPositionMenu] = useState({ top: 0, left: 0 });
-
-    function ouvrirMenuEmetteur() {
-        const rect = boutonFiltreRef.current?.getBoundingClientRect();
-        if (rect) {
-            setPositionMenu({
-                top: rect.bottom + 6,
-                // Recale le menu s'il dépasserait le bord droit de la fenêtre.
-                left: Math.min(rect.left, window.innerWidth - 252),
-            });
-        }
-        setMenuEmetteurOuvert((v) => !v);
-    }
-
-    // Ferme le menu au clic en dehors, sur Échap, ou dès qu'on défile (sinon
-    // le menu, en position fixe, resterait figé loin de son en-tête).
-    useEffect(() => {
-        if (!menuEmetteurOuvert) return;
-
-        function auClic(e) {
-            if (menuEmetteurRef.current && !menuEmetteurRef.current.contains(e.target)) {
-                setMenuEmetteurOuvert(false);
-            }
-        }
-        function auClavier(e) {
-            if (e.key === 'Escape') setMenuEmetteurOuvert(false);
-        }
-        function auDefilement() {
-            setMenuEmetteurOuvert(false);
-        }
-
-        document.addEventListener('mousedown', auClic);
-        document.addEventListener('keydown', auClavier);
-        // capture : attrape aussi le défilement du conteneur du tableau
-        document.addEventListener('scroll', auDefilement, true);
-        return () => {
-            document.removeEventListener('mousedown', auClic);
-            document.removeEventListener('keydown', auClavier);
-            document.removeEventListener('scroll', auDefilement, true);
-        };
-    }, [menuEmetteurOuvert]);
     const [colonnesVisibles, setColonnesVisibles] = useState(() => {
         try {
             const sauvegarde = JSON.parse(localStorage.getItem(CLE_COLONNES_VISIBLES));
@@ -658,34 +611,12 @@ export default function Gestion({
     // Liste des émetteurs proposés dans le menu, calculée AVANT d'appliquer le
     // filtre par émetteur : sinon décocher deviendrait impossible, la liste se
     // réduisant à mesure qu'on coche.
-    const emetteursDisponibles = (() => {
-        const compteurs = new Map();
-        for (const c of commandesAffichees) {
-            const cle = (c.Emetteur || '').trim() || EMETTEUR_VIDE;
-            compteurs.set(cle, (compteurs.get(cle) || 0) + 1);
-        }
-        return [...compteurs.entries()]
-            .map(([valeur, nombre]) => ({ valeur, nombre }))
-            .sort((a, b) => b.nombre - a.nombre);
-    })();
+    const emetteursDisponibles = valeursDistinctes(commandesAffichees, 'Emetteur', EMETTEUR_VIDE);
 
     if (filtreEmetteurs.length > 0) {
         commandesAffichees = commandesAffichees.filter((c) =>
             filtreEmetteurs.includes((c.Emetteur || '').trim() || EMETTEUR_VIDE)
         );
-    }
-
-    function basculerEmetteur(valeur) {
-        setFiltreEmetteurs((actuels) =>
-            actuels.includes(valeur) ? actuels.filter((v) => v !== valeur) : [...actuels, valeur]
-        );
-    }
-
-    const tousEmetteursCoches =
-        emetteursDisponibles.length > 0 && filtreEmetteurs.length === emetteursDisponibles.length;
-
-    function basculerTousEmetteurs() {
-        setFiltreEmetteurs(tousEmetteursCoches ? [] : emetteursDisponibles.map((e) => e.valeur));
     }
 
     function openAdd() {
@@ -1077,89 +1008,12 @@ export default function Gestion({
                                     }`}
                                 >
                                     {col.key === 'Emetteur' ? (
-                                        <span className="inline-flex items-center gap-1.5 max-w-full">
-                                            <span className="truncate">
-                                                {col.label}
-                                                {filtreEmetteurs.length > 0 && ` (${filtreEmetteurs.length})`}
-                                            </span>
-                                            <span className="shrink-0" ref={menuEmetteurRef}>
-                                                <button
-                                                    type="button"
-                                                    ref={boutonFiltreRef}
-                                                    onClick={ouvrirMenuEmetteur}
-                                                    title={
-                                                        filtreEmetteurs.length > 0
-                                                            ? `${filtreEmetteurs.length} émetteur(s) sélectionné(s)`
-                                                            : 'Filtrer par émetteur'
-                                                    }
-                                                    className={`flex h-5 w-5 items-center justify-center rounded transition-colors ${
-                                                        filtreEmetteurs.length > 0
-                                                            ? 'text-[#0d2b52] bg-blue-100 dark:text-blue-300 dark:bg-blue-900/50'
-                                                            : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200/70 dark:hover:text-gray-200 dark:hover:bg-gray-700'
-                                                    }`}
-                                                >
-                                                    <IconFiltre className="h-3.5 w-3.5" />
-                                                </button>
-
-                                                {menuEmetteurOuvert && (
-                                                    <div
-                                                        style={{ top: positionMenu.top, left: positionMenu.left }}
-                                                        className="fixed z-[120] w-60 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg normal-case tracking-normal"
-                                                    >
-                                                        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800">
-                                                            <button
-                                                                type="button"
-                                                                onClick={basculerTousEmetteurs}
-                                                                className="text-xs font-semibold text-[#0d2b52] dark:text-blue-300 hover:underline"
-                                                            >
-                                                                {tousEmetteursCoches ? 'Tout désélectionner' : 'Tout sélectionner'}
-                                                            </button>
-                                                            <span className="text-[11px] font-normal text-gray-400 dark:text-gray-500">
-                                                                {emetteursDisponibles.length}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className="max-h-64 overflow-y-auto py-1">
-                                                            {emetteursDisponibles.map((e) => (
-                                                                <label
-                                                                    key={e.valeur}
-                                                                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-normal text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={filtreEmetteurs.includes(e.valeur)}
-                                                                        onChange={() => basculerEmetteur(e.valeur)}
-                                                                        className="rounded border-gray-300 dark:border-gray-600 text-[#0d2b52] focus:ring-[#0d2b52]/30"
-                                                                    />
-                                                                    <span className="flex-1 truncate" title={e.valeur}>
-                                                                        {e.valeur}
-                                                                    </span>
-                                                                    <span className="text-[11px] text-gray-400 dark:text-gray-500 shrink-0">
-                                                                        ({e.nombre})
-                                                                    </span>
-                                                                </label>
-                                                            ))}
-                                                            {emetteursDisponibles.length === 0 && (
-                                                                <p className="px-3 py-3 text-sm font-normal text-gray-400 dark:text-gray-600">
-                                                                    Aucun émetteur.
-                                                                </p>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-800">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setFiltreEmetteurs([])}
-                                                                disabled={filtreEmetteurs.length === 0}
-                                                                className="w-full rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700"
-                                                            >
-                                                                Effacer le filtre
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </span>
-                                        </span>
+                                        <FiltreColonne
+                                            label={col.label}
+                                            valeurs={emetteursDisponibles}
+                                            selection={filtreEmetteurs}
+                                            onChange={setFiltreEmetteurs}
+                                        />
                                     ) : (
                                         col.label
                                     )}
