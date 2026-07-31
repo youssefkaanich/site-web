@@ -153,8 +153,8 @@ class CommandeController extends Controller
     }
 
     /**
-     * Ne garde que les commandes dont le code article est valide (un "A" en
-     * 5e position), sauf celles extraites d'une image (OCR) qui passent
+     * Ne garde que les commandes dont le code article est valide (un "A" ou un
+     * "B" en 5e position), sauf celles extraites d'une image (OCR) qui passent
      * toujours.
      *
      * ATTENTION : règle reproduite à l'identique côté React dans
@@ -171,7 +171,9 @@ class CommandeController extends Controller
 
             $code = trim((string) ($c['Article'] ?? ''));
 
-            return strlen($code) >= 5 && strtoupper($code[4]) === 'A';
+            // $code[4] = 5e caractère (les index commencent à 0).
+            // strtoupper() : le code peut arriver en minuscules selon la source.
+            return strlen($code) >= 5 && in_array(strtoupper($code[4]), ['A', 'B'], true);
         }));
     }
 
