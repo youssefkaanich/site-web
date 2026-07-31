@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CommandeStore;
+use App\Services\ServiceStore;
 use App\Support\ArticleSopal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -269,12 +270,29 @@ class CommandeController extends Controller
         // article -- voir StockController::quantitesParArticle()).
         $stock = StockController::quantitesParArticle();
 
-        $suivi = $commandes
-            ->filter(fn (array $c) => in_array($c['Job'] ?? null, ['Export', 'Commercial'], true))
-            ->map(function (array $c) use ($stock) {
+        // Les commandes entièrement servies quittent cette vue (elles sont
+        // sur la page "Commandes servies").
+        $actives = $commandes->filter(
+            fn (array $c) => in_array($c['Job'] ?? null, ['Export', 'Commercial'], true)
+                && ($c['statut'] ?? null) !== ServiceStore::SERVIE
+        );
+
+        // Déjà servi par article (import actif) et par commande : calculés en
+        // deux requêtes groupées plutôt qu'une par ligne.
+        $servisArticle = ServiceStore::servisParArticle($stock['id'] ?? null);
+        $servisCommande = ServiceStore::servisParCommande($actives->pluck('id')->all());
+        $historique = ServiceStore::historique($actives->pluck('id')->all());
+
+        $suivi = $actives
+            ->map(function (array $c) use ($stock, $servisArticle, $servisCommande, $historique) {
                 $article = trim((string) ($c['Article'] ?? ''));
-                $enStock = $stock['quantites'][$article] ?? 0;
-                $demandee = is_numeric($c['Qte_demandee'] ?? null) ? (float) $c['Qte_demandee'] : null;
+                // Stock disponible = fichier Excel − déjà servi. Partagé entre
+                // commandes : servir l'une baisse le disponible de l'autre.
+                $enStock = ($stock['quantites'][$article] ?? 0) - ($servisArticle[$article] ?? 0);
+
+                $demandee = ServiceStore::nombreOuNull($c['Qte_demandee'] ?? null);
+                $servi = $servisCommande[$c['id']] ?? 0.0;
+                $reste = $demandee === null ? null : max(0.0, $demandee - $servi);
 
                 return [
                     'id' => $c['id'],
@@ -285,11 +303,16 @@ class CommandeController extends Controller
                     'Date_mail' => $c['Date_mail'],
                     'Urgent' => $c['Urgent'],
                     'Note' => $c['Note'],
+                    'statut' => $c['statut'] ?? ServiceStore::EN_ATTENTE,
                     'Qte_demandee' => $c['Qte_demandee'],
-                    'Reste_a_livrer' => $c['Reste_a_livrer'],
+                    // Reste à livrer recalculé d'après les services (la colonne
+                    // d'origine reste celle du mail, on ne l'écrase pas).
+                    'Reste_a_livrer' => $reste ?? $c['Reste_a_livrer'],
                     'Qte_en_rupture' => $c['Qte_en_rupture'],
                     'qteStock' => $enStock,
-                    'suffisant' => $demandee === null ? null : $enStock >= $demandee,
+                    'totalServi' => $servi,
+                    'services' => $historique[$c['id']] ?? [],
+                    'suffisant' => $demandee === null ? null : $enStock >= $reste,
                 ];
             })
             ->values();
@@ -302,6 +325,71 @@ class CommandeController extends Controller
                 'nomFichier' => $stock['nomFichier'],
                 'titreStock' => $stock['titreStock'],
             ],
+        ]);
+    }
+
+    /** Enregistre une sortie de stock pour une commande (service total ou partiel). */
+    public function servir(Request $request, string $id)
+    {
+        $donnees = $request->validate(['quantite' => 'required|numeric|gt:0']);
+
+        try {
+            ServiceStore::servir((int) $id, (float) $donnees['quantite'], $request->user()?->name);
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('erreur', $e->getMessage());
+        }
+
+        return redirect()->back()->with('succes', 'Service enregistré.');
+    }
+
+    /** Annule un service : la quantité est restituée au stock. */
+    public function annulerService(string $serviceId)
+    {
+        try {
+            ServiceStore::annuler((int) $serviceId);
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('erreur', $e->getMessage());
+        }
+
+        return redirect()->back()->with('succes', 'Service annulé, la quantité est restituée au stock.');
+    }
+
+    /** Marque une commande servie sans saisie de quantité (commandes sans quantité demandée). */
+    public function marquerServie(string $id)
+    {
+        ServiceStore::marquerServie((int) $id);
+
+        return redirect()->back()->with('succes', 'Commande marquée comme servie.');
+    }
+
+    /** Remet une commande servie dans la vue active. */
+    public function reactiverCommande(string $id)
+    {
+        ServiceStore::reactiver((int) $id);
+
+        return redirect()->back()->with('succes', 'Commande remise en cours.');
+    }
+
+    /** Page "Commandes servies" : les commandes entièrement servies, avec leur historique. */
+    public function commandesServies()
+    {
+        $servies = collect(CommandeStore::toutes())
+            ->filter(fn (array $c) => ($c['statut'] ?? null) === ServiceStore::SERVIE)
+            ->values();
+
+        $historique = ServiceStore::historique($servies->pluck('id')->all());
+
+        return \Inertia\Inertia::render('CommandesServies', [
+            'commandes' => $servies->map(fn (array $c) => [
+                'id' => $c['id'],
+                'Job' => $c['Job'],
+                'Article' => $c['Article'],
+                'Designation' => $c['Designation'],
+                'Emetteur' => $c['Emetteur'],
+                'Date_mail' => $c['Date_mail'],
+                'Qte_demandee' => $c['Qte_demandee'],
+                'services' => $historique[$c['id']] ?? [],
+            ])->values(),
         ]);
     }
 

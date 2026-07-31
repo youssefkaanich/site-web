@@ -155,6 +155,11 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                         <NavLink href="/stock-production" label="Stock / Production" active={url.startsWith('/stock-production')} />
                         <NavLink href="/analyse" label="Analyse" active={url.startsWith('/analyse')} />
                         <NavLink
+                            href="/commandes-servies"
+                            label="Commandes servies"
+                            active={url.startsWith('/commandes-servies')}
+                        />
+                        <NavLink
                             href="/corbeille"
                             label="Corbeille"
                             icon={<IconeCorbeille />}

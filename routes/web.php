@@ -77,6 +77,13 @@ Route::middleware('auth')->group(function () {
     // Renommé (pas "/commandes/export" : ça désigne maintenant la vue "service Export", voir plus haut).
     Route::get('/commandes/exporter-excel', [CommandeController::class, 'export'])->name('commandes.export');
 
+    // Service des commandes depuis le stock (page Analyse)
+    Route::post('/commandes/{id}/servir', [CommandeController::class, 'servir'])->name('commandes.servir');
+    Route::post('/commandes/{id}/marquer-servie', [CommandeController::class, 'marquerServie'])->name('commandes.marquerServie');
+    Route::post('/commandes/{id}/reactiver', [CommandeController::class, 'reactiverCommande'])->name('commandes.reactiver');
+    Route::delete('/services/{serviceId}', [CommandeController::class, 'annulerService'])->name('services.annuler');
+    Route::get('/commandes-servies', [CommandeController::class, 'commandesServies'])->name('commandesServies');
+
     Route::get('/corbeille', [CommandeController::class, 'corbeille'])->name('corbeille');
     Route::post('/corbeille/{id}/restaurer', [CommandeController::class, 'restaurer'])->name('commandes.restaurer');
     Route::post('/corbeille/restaurer-selection', [CommandeController::class, 'restaurerSelection'])->name('commandes.restaurerSelection');

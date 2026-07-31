@@ -299,13 +299,18 @@ class StockController extends Controller
             }
 
             return [
+                // id de l'import actif : les services enregistrés y sont
+                // rattachés, et seuls ceux du même import sont déduits du
+                // stock (un nouvel export ERP contient déjà les sorties
+                // physiques, les déduire à nouveau les compterait deux fois).
+                'id' => $donnees['id'] ?? null,
                 'quantites' => $quantites,
                 'titreStock' => $donnees['titreStock'] ?? null,
                 'nomFichier' => $donnees['nomFichier'] ?? null,
             ];
         }
 
-        return ['quantites' => [], 'titreStock' => null, 'nomFichier' => null];
+        return ['id' => null, 'quantites' => [], 'titreStock' => null, 'nomFichier' => null];
     }
 
     /**
