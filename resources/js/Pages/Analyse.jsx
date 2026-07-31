@@ -156,13 +156,17 @@ function CelluleService({ ligne }) {
  * responsable indique comment il compte servir la commande.
  */
 function TableauSuivi({ suivi, stockSource }) {
-    const [service, setService] = useState('Export');
+    const [categorie, setCategorie] = useState('export');
     const [notes, setNotes] = useState({});
     const [enregistrement, setEnregistrement] = useState(null);
     // Filtre par émetteur : liste vide = tous affichés.
     const [emetteurs, setEmetteurs] = useState([]);
 
-    const lignesDuService = suivi.filter((s) => s.Job === service);
+    const lignesDuService = suivi.filter((s) => s.categorie === categorie);
+    const compter = (c) => suivi.filter((s) => s.categorie === c).length;
+    // "Commande ferme" regroupe export et chantier : l'onglet reste actif
+    // quand on passe de l'un à l'autre.
+    const sousOngletActif = categorie === 'export' || categorie === 'chantier';
 
     // Émetteurs proposés, calculés AVANT le filtre : sinon la liste se
     // réduirait à mesure qu'on coche et on ne pourrait plus rien décocher.
@@ -173,10 +177,10 @@ function TableauSuivi({ suivi, stockSource }) {
             ? lignesDuService
             : lignesDuService.filter((l) => emetteurs.includes((l.Emetteur || '').trim() || EMETTEUR_VIDE));
 
-    // Changer de service remet le filtre à zéro : les émetteurs d'un service
+    // Changer d'onglet remet le filtre à zéro : les émetteurs d'une catégorie
     // n'ont aucune raison d'exister dans l'autre.
-    function changerService(s) {
-        setService(s);
+    function changerCategorie(c) {
+        setCategorie(c);
         setEmetteurs([]);
     }
 
@@ -204,26 +208,54 @@ function TableauSuivi({ suivi, stockSource }) {
                             : 'Aucun import de stock disponible — les quantités en stock sont à 0.'}
                     </p>
                 </div>
+                {/* Mêmes onglets que la page Commandes : "Commande ferme"
+                    (Export + Chantier) et "Commercial" hors chantier. */}
                 <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                    {['Export', 'Commercial'].map((s) => (
+                    <button
+                        onClick={() => changerCategorie('export')}
+                        className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                            sousOngletActif
+                                ? 'bg-white dark:bg-gray-900 shadow-sm text-blue-700 dark:text-blue-400'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        Commande ferme ({compter('export') + compter('chantier')})
+                    </button>
+                    <button
+                        onClick={() => changerCategorie('commercial')}
+                        className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                            categorie === 'commercial'
+                                ? 'bg-white dark:bg-gray-900 shadow-sm text-[#7a2331] dark:text-[#e8b4bc]'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        Commercial ({compter('commercial')})
+                    </button>
+                </div>
+            </div>
+
+            {/* Sous-onglets de "Commande ferme", comme sur la page Commandes :
+                Export = service Export, Chantier = Commercial parlant de chantier. */}
+            {sousOngletActif && (
+                <div className="flex items-center gap-1 px-5 border-b border-gray-200 dark:border-gray-800">
+                    {[
+                        { cle: 'export', label: 'Export' },
+                        { cle: 'chantier', label: 'Chantier' },
+                    ].map((o) => (
                         <button
-                            key={s}
-                            onClick={() => changerService(s)}
-                            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
-                                service === s
-                                    ? `bg-white dark:bg-gray-900 shadow-sm ${
-                                          s === 'Export'
-                                              ? 'text-blue-700 dark:text-blue-400'
-                                              : 'text-[#7a2331] dark:text-[#e8b4bc]'
-                                      }`
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            key={o.cle}
+                            onClick={() => changerCategorie(o.cle)}
+                            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
+                                categorie === o.cle
+                                    ? 'border-blue-700 text-blue-700 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                             }`}
                         >
-                            {s} ({suivi.filter((x) => x.Job === s).length})
+                            {o.label} ({compter(o.cle)})
                         </button>
                     ))}
                 </div>
-            </div>
+            )}
 
             <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse">
@@ -328,8 +360,8 @@ function TableauSuivi({ suivi, stockSource }) {
                             <tr>
                                 <td colSpan={9} className="px-4 py-10 text-center text-gray-400 dark:text-gray-600">
                                     {emetteurs.length > 0
-                                        ? `Aucune commande ${service} pour cet émetteur.`
-                                        : `Aucune commande ${service}.`}
+                                        ? 'Aucune commande pour cet émetteur.'
+                                        : 'Aucune commande dans cet onglet.'}
                                 </td>
                             </tr>
                         )}

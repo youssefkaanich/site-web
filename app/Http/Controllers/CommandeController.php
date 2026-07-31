@@ -142,6 +142,18 @@ class CommandeController extends Controller
      * ATTENTION : règle reproduite à l'identique côté React dans
      * resources/js/utils/classificationCommande.js.
      */
+    /** Catégorie d'une commande : 'export', 'chantier' ou 'commercial' (null si ni Export ni Commercial). */
+    private static function categorieDe(array $c): ?string
+    {
+        foreach (['export', 'chantier', 'commercial'] as $categorie) {
+            if (self::correspondACategorie($c, $categorie)) {
+                return $categorie;
+            }
+        }
+
+        return null;
+    }
+
     private static function correspondACategorie(array $c, ?string $categorie): bool
     {
         $job = $c['Job'] ?? null;
@@ -300,6 +312,9 @@ class CommandeController extends Controller
                 return [
                     'id' => $c['id'],
                     'Job' => $c['Job'],
+                    // Même découpe que la page Commandes (voir
+                    // correspondACategorie) : export / chantier / commercial.
+                    'categorie' => self::categorieDe($c),
                     'Article' => $c['Article'],
                     'Designation' => $c['Designation'],
                     'Emetteur' => $c['Emetteur'],
