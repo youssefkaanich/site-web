@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CommandeStore;
+use App\Support\ArticleSopal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -153,28 +154,16 @@ class CommandeController extends Controller
     }
 
     /**
-     * Ne garde que les commandes dont le code article est valide (un "A" ou un
-     * "B" en 5e position), sauf celles extraites d'une image (OCR) qui passent
-     * toujours.
-     *
-     * ATTENTION : règle reproduite à l'identique côté React dans
-     * resources/js/utils/articleValidation.js — toute modification ici doit
-     * être reportée là-bas (même principe que normaliserLabel(), dupliqué
-     * entre basestock.py et StockController).
+     * Ne garde que les commandes dont le code article est valide (voir
+     * ArticleSopal::estValide, partagé avec le stock), sauf celles extraites
+     * d'une image (OCR) qui passent toujours.
      */
     private static function filtrerArticlesValides(array $commandes): array
     {
-        return array_values(array_filter($commandes, function (array $c) {
-            if (($c['Source'] ?? null) === 'image-ocr') {
-                return true;
-            }
-
-            $code = trim((string) ($c['Article'] ?? ''));
-
-            // $code[4] = 5e caractère (les index commencent à 0).
-            // strtoupper() : le code peut arriver en minuscules selon la source.
-            return strlen($code) >= 5 && in_array(strtoupper($code[4]), ['A', 'B'], true);
-        }));
+        return array_values(array_filter(
+            $commandes,
+            fn (array $c) => ArticleSopal::estValide($c['Article'] ?? null, $c['Source'] ?? null)
+        ));
     }
 
     public function store(Request $request)

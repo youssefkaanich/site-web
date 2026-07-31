@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CommandeStore;
+use App\Support\ArticleSopal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
@@ -72,6 +73,13 @@ class StockController extends Controller
 
             $titreStock = self::extraireTitre($resultat->output());
             [$colonnes, $lignes] = self::lireXlsx($sortie);
+
+            // Écarte les lignes dont le code article n'est pas un vrai code
+            // Sopal (voir ArticleSopal::estValide) : lignes de sous-total,
+            // en-têtes répétés, libellés parasites... Fait À L'IMPORT, donc
+            // l'historique ne garde que les lignes retenues -- réimporter le
+            // fichier d'origine suffit à repartir de zéro.
+            $lignes = self::filtrerArticlesValides($colonnes, $lignes);
 
             $entree_historique = [
                 'id' => $id,
@@ -298,6 +306,30 @@ class StockController extends Controller
         }
 
         return ['quantites' => [], 'titreStock' => null, 'nomFichier' => null];
+    }
+
+    /**
+     * Ne garde que les lignes dont la colonne "Article" contient un code
+     * valide (un "A" ou un "B" en 5e position — voir ArticleSopal::estValide,
+     * la même règle que pour les commandes).
+     *
+     * Si le fichier n'a pas de colonne "Article", rien n'est filtré : mieux
+     * vaut tout afficher que vider silencieusement un import au format
+     * inattendu.
+     */
+    private static function filtrerArticlesValides(array $colonnes, array $lignes): array
+    {
+        $colonneArticle = collect($colonnes)
+            ->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
+
+        if (!$colonneArticle) {
+            return $lignes;
+        }
+
+        return array_values(array_filter(
+            $lignes,
+            fn (array $l) => ArticleSopal::estValide($l[$colonneArticle['key']] ?? null)
+        ));
     }
 
     /** Compare des noms de colonnes en ignorant accents/espaces/tirets/casse (même logique que basestock.py). */
