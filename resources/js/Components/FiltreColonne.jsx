@@ -72,31 +72,47 @@ export default function FiltreColonne({ label, valeurs, selection, onChange }) {
     }
 
     return (
-        <span className="inline-flex items-center gap-1.5 max-w-full">
+        // Toute la cellule est cliquable (pas seulement l'icône) : c'est la
+        // zone la plus naturelle à viser. Le ref englobe aussi le menu, sinon
+        // un clic sur le libellé serait vu comme "en dehors" et le menu se
+        // fermerait puis se rouvrirait aussitôt.
+        <span
+            ref={conteneurRef}
+            role="button"
+            tabIndex={0}
+            onClick={basculerMenu}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    basculerMenu();
+                }
+            }}
+            title={actif ? `${selection.length} valeur(s) sélectionnée(s)` : `Filtrer par ${label.toLowerCase()}`}
+            className="group flex items-center gap-1.5 w-full cursor-pointer select-none rounded outline-none focus-visible:ring-2 focus-visible:ring-[#0d2b52]/30"
+        >
             <span className="truncate">
                 {label}
                 {actif && ` (${selection.length})`}
             </span>
 
-            <span className="shrink-0" ref={conteneurRef}>
-                <button
-                    type="button"
-                    ref={boutonRef}
-                    onClick={basculerMenu}
-                    title={actif ? `${selection.length} valeur(s) sélectionnée(s)` : `Filtrer par ${label.toLowerCase()}`}
+            <span className="shrink-0" ref={boutonRef}>
+                <span
                     className={`flex h-5 w-5 items-center justify-center rounded transition-colors ${
                         actif
                             ? 'text-[#0d2b52] bg-blue-100 dark:text-blue-300 dark:bg-blue-900/50'
-                            : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200/70 dark:hover:text-gray-200 dark:hover:bg-gray-700'
+                            : 'text-gray-400 group-hover:text-gray-700 group-hover:bg-gray-200/70 dark:group-hover:text-gray-200 dark:group-hover:bg-gray-700'
                     }`}
                 >
                     <IconFiltre className="h-3.5 w-3.5" />
-                </button>
+                </span>
 
                 {ouvert && (
                     <div
+                        // Sans ça, cocher une case remonterait jusqu'à l'en-tête
+                        // cliquable et refermerait le menu aussitôt.
+                        onClick={(e) => e.stopPropagation()}
                         style={{ top: position.top, left: position.left }}
-                        className="fixed z-[120] w-60 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg normal-case tracking-normal"
+                        className="fixed z-[120] w-60 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg normal-case tracking-normal cursor-default font-normal"
                     >
                         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800">
                             <button
