@@ -229,6 +229,14 @@ export function IconInbox({ className = '' }) {
     );
 }
 
+export function IconFiltre({ className = '' }) {
+    return (
+        <svg className={className} {...BASE}>
+            <path d="M4 5.5h16l-6.25 7.4v5.35l-3.5 1.75V12.9Z" {...TRAIT} />
+        </svg>
+    );
+}
+
 export function IconPower({ className = '' }) {
     return (
         <svg className={className} {...BASE}>
