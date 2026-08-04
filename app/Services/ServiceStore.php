@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Http\Controllers\StockController;
+use App\Services\StockHistoriqueStore;
 use App\Models\Commande;
 use App\Models\Service;
 use Illuminate\Support\Facades\DB;
@@ -97,7 +98,9 @@ class ServiceStore
             throw new \RuntimeException("Cette commande n'existe plus.");
         }
 
-        $stock = StockController::quantitesParArticle();
+        // Stock FINAL (photo + mouvements) : c'est lui qui dit ce qui est
+        // réellement disponible avant de servir.
+        $stock = StockHistoriqueStore::quantitesFinales();
         $article = trim((string) $commande->Article);
 
         // Transaction : deux services simultanés sur le même article ne
@@ -168,7 +171,7 @@ class ServiceStore
     /** Stock réellement disponible pour un article : fichier Excel − services de l'import actif. */
     public static function stockDisponible(string $article, ?array $stock = null): float
     {
-        $stock ??= StockController::quantitesParArticle();
+        $stock ??= StockHistoriqueStore::quantitesFinales();
         $servis = self::servisParArticle($stock['id'] ?? null);
 
         return (float) ($stock['quantites'][$article] ?? 0) - (float) ($servis[$article] ?? 0);

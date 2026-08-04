@@ -4,39 +4,58 @@ namespace App\Http\Controllers;
 
 use App\Models\Service;
 use App\Services\CommandeStore;
-use App\Support\ArticleSopal;
+use App\Services\StockHistoriqueStore;
+use App\Services\StockStore;
+use App\Support\LecteurXlsx;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Str;
 
+/**
+ * Page Stock / Production : import du fichier de stock de l'ERP et
+ * consultation des articles.
+ *
+ * Depuis le 04/08/2026 les imports sont rangés EN BASE (tables stock_imports
+ * et stock_lignes) et non plus en fichiers JSON — voir StockStore, qui porte
+ * toute la logique d'accès.
+ */
 class StockController extends Controller
 {
-    private const DOSSIER_PYTHON = 'C:\\STAGE\\projet sopal';
-    private const SCRIPT = 'basestock.py';
+    /** Les gros fichiers de stock dépassent la limite par défaut. */
+    private const MEMOIRE = '1024M';
 
-    /** Nombre maximum d'imports gardés dans l'historique (les plus anciens sont supprimés au-delà). */
-    private const HISTORIQUE_MAX = 10;
-
+    /**
+     * Page Stock / Production.
+     *
+     * Elle porte deux choses : le tableau du dernier import (chargé par la
+     * page elle-même en JavaScript) et les vues de stock historique, qui ont
+     * besoin de la liste des articles et de la date de référence. Ces
+     * dernières sont fournies ici pour éviter un aller-retour supplémentaire
+     * au chargement.
+     */
     public function page()
     {
-        return \Inertia\Inertia::render('StockProduction');
-    }
+        $contexte = StockHistoriqueStore::contexte();
 
-    private function dossierHistorique(): string
-    {
-        $dossier = storage_path('app/stock_production_historique');
-        if (!is_dir($dossier)) {
-            mkdir($dossier, 0755, true);
-        }
-
-        return $dossier;
+        return \Inertia\Inertia::render('StockProduction', [
+            'historiquePret' => $contexte['ok'],
+            'historiqueErreur' => $contexte['ok'] ? null : $contexte['erreur'],
+            'reference' => $contexte['ok'] ? [
+                'nomFichier' => $contexte['reference']['nomFichier'],
+                'instant' => \App\Support\DateSopal::pourAffichage($contexte['instantReference']),
+                'nombreArticles' => count($contexte['reference']['quantites']),
+            ] : null,
+            'mouvements' => $contexte['ok'] ? \App\Services\MouvementStore::resume($contexte['import']) : null,
+            'articlesHistorique' => $contexte['ok'] ? StockHistoriqueStore::articlesDisponibles($contexte) : [],
+            'importsMouvements' => \App\Services\MouvementStore::liste(),
+            // Variation de chaque article depuis la photo de stock, pour que le
+            // tableau affiche le stock à jour et non la quantité du fichier.
+            'variationsMouvements' => StockHistoriqueStore::variationsParArticle(),
+        ]);
     }
 
     /**
      * Reçoit le fichier Excel importé, le fait nettoyer par basestock.py
-     * (colonnes retirées, 2e ligne = en-têtes), sauvegarde le résultat dans
-     * l'historique (storage/app/stock_production_historique) puis le renvoie
-     * en JSON pour affichage direct dans le tableau.
+     * (colonnes retirées, emplacements hors périmètre et statuts Q/R écartés),
+     * garde les seuls produits finis et enregistre le tout en base.
      */
     public function importer(Request $request)
     {
@@ -44,164 +63,70 @@ class StockController extends Controller
             'fichier' => 'required|file|mimes:xlsx,xls',
         ]);
 
+        ini_set('memory_limit', self::MEMOIRE);
+
         $dossierTmp = storage_path('app/stock_production_tmp');
         if (!is_dir($dossierTmp)) {
             mkdir($dossierTmp, 0755, true);
         }
 
-        $id = (string) Str::uuid();
-        $entree = "{$dossierTmp}/{$id}_entree.xlsx";
-        $sortie = "{$dossierTmp}/{$id}_sortie.xlsx";
-
+        $nomOriginal = $request->file('fichier')->getClientOriginalName();
+        $entree = $dossierTmp.'/'.uniqid('stock_').'.'.$request->file('fichier')->getClientOriginalExtension();
         $request->file('fichier')->move($dossierTmp, basename($entree));
-        $nomFichierOriginal = $request->file('fichier')->getClientOriginalName();
 
         try {
-            $resultat = Process::path(self::DOSSIER_PYTHON)
-                ->env(ExtractionController::env())
-                ->timeout(60)
-                ->run(['python', self::SCRIPT, $entree, $sortie]);
+            $resultat = StockStore::importer($entree, $nomOriginal);
 
-            if (!$resultat->successful()) {
-                return response()->json([
-                    'erreur' => "Le script basestock.py a échoué : ".trim($resultat->errorOutput() ?: $resultat->output()),
-                ], 422);
-            }
-
-            if (!file_exists($sortie)) {
-                return response()->json(['erreur' => 'Le fichier nettoyé est introuvable après traitement.'], 422);
-            }
-
-            $titreStock = self::extraireTitre($resultat->output());
-            [$colonnes, $lignes] = self::lireXlsx($sortie);
-
-            // Écarte les lignes dont le code article n'est pas un vrai code
-            // Sopal (voir ArticleSopal::estValide) : lignes de sous-total,
-            // en-têtes répétés, libellés parasites... Fait À L'IMPORT, donc
-            // l'historique ne garde que les lignes retenues -- réimporter le
-            // fichier d'origine suffit à repartir de zéro.
-            $lignes = self::filtrerArticlesValides($colonnes, $lignes);
-
-            $entree_historique = [
-                'id' => $id,
-                'nomFichier' => $nomFichierOriginal,
-                'titreStock' => $titreStock,
-                'horodatage' => now()->toIso8601String(),
-                'colonnes' => $colonnes,
-                'lignes' => $lignes,
-            ];
-            file_put_contents(
-                $this->dossierHistorique()."/{$id}.json",
-                json_encode($entree_historique, JSON_UNESCAPED_UNICODE)
-            );
-            self::purgerAncienHistorique($this->dossierHistorique());
-
-            return response()->json([
-                'id' => $id,
-                'nomFichier' => $nomFichierOriginal,
-                'titreStock' => $titreStock,
-                'colonnes' => $colonnes,
-                'lignes' => $lignes,
-            ]);
+            return $resultat['ok']
+                ? response()->json($resultat['import'])
+                : response()->json(['erreur' => $resultat['erreur']], 422);
         } finally {
             @unlink($entree);
-            @unlink($sortie);
         }
     }
 
-    /** Liste des imports sauvegardés (métadonnées seulement, pas les lignes) pour le sélecteur d'historique. */
+    /** Liste des imports sauvegardés (métadonnées seulement) pour le sélecteur d'historique. */
     public function historique()
     {
-        $fichiers = glob($this->dossierHistorique().'/*.json') ?: [];
-        usort($fichiers, fn ($a, $b) => filemtime($b) <=> filemtime($a));
-
-        $liste = array_map(function ($chemin) {
-            $donnees = json_decode(file_get_contents($chemin), true);
-
-            return [
-                'id' => $donnees['id'] ?? pathinfo($chemin, PATHINFO_FILENAME),
-                'nomFichier' => $donnees['nomFichier'] ?? '(sans nom)',
-                'titreStock' => $donnees['titreStock'] ?? null,
-                'horodatage' => $donnees['horodatage'] ?? null,
-                'nombreLignes' => count($donnees['lignes'] ?? []),
-            ];
-        }, $fichiers);
-
-        return response()->json($liste);
+        return response()->json(StockStore::liste());
     }
 
     /** Recharge un import précédemment sauvegardé (colonnes + lignes complètes). */
     public function charger(string $id)
     {
-        $chemin = $this->dossierHistorique()."/{$id}.json";
+        $import = StockStore::charger($id);
 
-        if (!file_exists($chemin)) {
-            return response()->json(['erreur' => 'Cet import n\'existe plus.'], 404);
-        }
-
-        $donnees = json_decode(file_get_contents($chemin), true);
-
-        return response()->json([
-            'id' => $donnees['id'],
-            'nomFichier' => $donnees['nomFichier'],
-            'titreStock' => $donnees['titreStock'] ?? null,
-            'colonnes' => $donnees['colonnes'],
-            'lignes' => $donnees['lignes'],
-        ]);
+        return $import
+            ? response()->json(StockStore::contenu($import))
+            : response()->json(['erreur' => "Cet import n'existe plus."], 404);
     }
 
-    /** Supprime un import de l'historique. */
     public function supprimerHistorique(string $id)
     {
-        $chemin = $this->dossierHistorique()."/{$id}.json";
-
-        if (!file_exists($chemin)) {
-            return response()->json(['erreur' => 'Cet import n\'existe plus.'], 404);
-        }
-
-        unlink($chemin);
-
-        return response()->json(['ok' => true]);
+        return StockStore::supprimer($id)
+            ? response()->json(['ok' => true])
+            : response()->json(['erreur' => "Cet import n'existe plus."], 404);
     }
 
     /**
-     * Page de détail d'un article : cherche toutes ses lignes (= tous ses
-     * emplacements) dans un import déjà sauvegardé, et les organise en
-     * onglets (infos générales / emplacements / commandes liées).
+     * Page de détail d'un article : toutes ses lignes (= tous ses
+     * emplacements), ses commandes liées et ses mouvements de stock.
      */
     public function article(string $id, string $article)
     {
-        $chemin = $this->dossierHistorique()."/{$id}.json";
+        $import = StockStore::charger($id);
 
-        if (!file_exists($chemin)) {
+        if (!$import) {
             abort(404, "Cet import n'existe plus.");
         }
 
-        $donnees = json_decode(file_get_contents($chemin), true);
+        $lignes = StockStore::lignesArticle($id, $article);
 
-        $colonneArticle = collect($donnees['colonnes'])
-            ->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
-
-        if (!$colonneArticle) {
-            abort(404, "Ce fichier n'a pas de colonne \"Article\".");
-        }
-
-        $lignesArticle = collect($donnees['lignes'])
-            ->filter(fn ($l) => (string) ($l[$colonneArticle['key']] ?? '') === $article)
-            ->values();
-
-        if ($lignesArticle->isEmpty()) {
+        if (empty($lignes)) {
             abort(404, "Article \"{$article}\" introuvable dans cet import.");
         }
 
-        // "Commandes liées" : toutes les commandes (Gestion.jsx) portant sur
-        // ce même Article -- lien simple par nom d'article (pas de vraie clé
-        // étrangère, les deux jeux de données n'ont jamais été rapprochés
-        // avant), trim() pour tolérer un espace de saisie différent.
-        $commandesLiees = collect(CommandeStore::toutes())
-            ->filter(fn (array $c) => trim((string) ($c['Article'] ?? '')) === trim($article))
-            ->values()
-            ->all();
+        $colonneArticle = LecteurXlsx::trouverColonne($import->colonnes, 'article');
 
         // Quantité déjà sortie du stock via la page Analyse, pour CET import
         // (les services d'un import précédent ne comptent plus, voir
@@ -214,53 +139,36 @@ class StockController extends Controller
         return \Inertia\Inertia::render('StockArticleDetail', [
             'idImport' => $id,
             'article' => $article,
-            'nomFichier' => $donnees['nomFichier'],
-            'titreStock' => $donnees['titreStock'] ?? null,
-            'colonnes' => $donnees['colonnes'],
-            'colonneArticleKey' => $colonneArticle['key'],
-            'lignes' => $lignesArticle,
-            'commandesLiees' => $commandesLiees,
+            'nomFichier' => $import->nom_fichier,
+            'titreStock' => $import->titre_stock,
+            'colonnes' => $import->colonnes,
+            'colonneArticleKey' => $colonneArticle['key'] ?? null,
+            'lignes' => $lignes,
+            'commandesLiees' => self::commandesLiees($article),
             'qteServie' => $servie,
+            'mouvementsParHeure' => StockHistoriqueStore::parHeure($article),
+            'mouvementsDetail' => StockHistoriqueStore::lignesArticle($article),
+            'stockDerniereDate' => StockHistoriqueStore::stockDerniereDate($article),
         ]);
     }
 
     /**
-     * Retrouve un article dans le dernier import de stock contenant ce nom
-     * d'article, et redirige vers sa page de détail -- point d'entrée depuis
-     * la page Commandes (Gestion.jsx), qui ne connaît pas l'id de l'import.
+     * Retrouve un article dans le dernier import de stock le contenant, et
+     * redirige vers sa page de détail — point d'entrée depuis la page
+     * Commandes, qui ne connaît pas l'id de l'import.
      */
     public function articleDernier(string $article)
     {
-        $fichiers = glob($this->dossierHistorique().'/*.json') ?: [];
-        usort($fichiers, fn ($a, $b) => filemtime($b) <=> filemtime($a));
+        $import = StockStore::dernierAvecArticle($article);
 
-        foreach ($fichiers as $chemin) {
-            $donnees = json_decode(file_get_contents($chemin), true);
-
-            $colonneArticle = collect($donnees['colonnes'] ?? [])
-                ->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
-
-            if (!$colonneArticle) {
-                continue;
-            }
-
-            $trouve = collect($donnees['lignes'] ?? [])
-                ->contains(fn ($l) => trim((string) ($l[$colonneArticle['key']] ?? '')) === trim($article));
-
-            if ($trouve) {
-                return redirect()->route('stockProduction.article', ['id' => $donnees['id'], 'article' => $article]);
-            }
+        if ($import) {
+            return redirect()->route('stockProduction.article', ['id' => $import->id, 'article' => $article]);
         }
 
         // Cas courant (pas une vraie erreur) : beaucoup de commandes portent
-        // sur un article absent du dernier import de stock -- on affiche
-        // quand même la fiche article, avec une quantité de 0 (au lieu d'une
-        // page 404/message d'erreur), les commandes liées restant utiles à voir.
-        $commandesLiees = collect(CommandeStore::toutes())
-            ->filter(fn (array $c) => trim((string) ($c['Article'] ?? '')) === trim($article))
-            ->values()
-            ->all();
-
+        // sur un article absent du dernier import de stock — on affiche quand
+        // même la fiche, avec une quantité de 0, les commandes liées et les
+        // mouvements restant utiles à voir.
         return \Inertia\Inertia::render('StockArticleDetail', [
             'idImport' => null,
             'article' => $article,
@@ -269,148 +177,34 @@ class StockController extends Controller
             'colonnes' => [],
             'colonneArticleKey' => null,
             'lignes' => [],
-            'commandesLiees' => $commandesLiees,
+            'commandesLiees' => self::commandesLiees($article),
             'nonTrouveEnStock' => true,
+            'mouvementsParHeure' => StockHistoriqueStore::parHeure($article),
+            'mouvementsDetail' => StockHistoriqueStore::lignesArticle($article),
+            'stockDerniereDate' => StockHistoriqueStore::stockDerniereDate($article),
         ]);
     }
 
     /**
-     * Quantité en stock par article, d'après l'import de stock le plus récent
-     * (un article a plusieurs emplacements -> quantités additionnées).
-     * Utilisé par la page Analyse pour confronter commandes et stock réel.
-     *
-     * @return array{quantites: array<string, float>, titreStock: ?string, nomFichier: ?string}
+     * Commandes portant sur ce même article — lien simple par nom d'article
+     * (pas de vraie clé étrangère, les deux jeux de données n'ont jamais été
+     * rapprochés avant), trim() pour tolérer un espace de saisie différent.
      */
-    public static function quantitesParArticle(): array
+    private static function commandesLiees(string $article): array
     {
-        $dossier = storage_path('app/stock_production_historique');
-        $fichiers = is_dir($dossier) ? (glob($dossier.'/*.json') ?: []) : [];
-        usort($fichiers, fn ($a, $b) => filemtime($b) <=> filemtime($a));
-
-        foreach ($fichiers as $chemin) {
-            $donnees = json_decode(file_get_contents($chemin), true);
-            $colonnes = collect($donnees['colonnes'] ?? []);
-
-            $colArticle = $colonnes->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
-            $colQte = $colonnes->first(fn ($c) => str_contains(self::normaliserLabel($c['label']), 'qte'))
-                ?? $colonnes->first(fn ($c) => str_contains(self::normaliserLabel($c['label']), 'quantite'));
-
-            if (!$colArticle || !$colQte) {
-                continue;
-            }
-
-            $quantites = [];
-            foreach ($donnees['lignes'] ?? [] as $ligne) {
-                $article = trim((string) ($ligne[$colArticle['key']] ?? ''));
-                if ($article === '') {
-                    continue;
-                }
-                $quantites[$article] = ($quantites[$article] ?? 0) + (float) ($ligne[$colQte['key']] ?? 0);
-            }
-
-            return [
-                // id de l'import actif : les services enregistrés y sont
-                // rattachés, et seuls ceux du même import sont déduits du
-                // stock (un nouvel export ERP contient déjà les sorties
-                // physiques, les déduire à nouveau les compterait deux fois).
-                'id' => $donnees['id'] ?? null,
-                'quantites' => $quantites,
-                'titreStock' => $donnees['titreStock'] ?? null,
-                'nomFichier' => $donnees['nomFichier'] ?? null,
-            ];
-        }
-
-        return ['id' => null, 'quantites' => [], 'titreStock' => null, 'nomFichier' => null];
+        return collect(CommandeStore::toutes())
+            ->filter(fn (array $c) => trim((string) ($c['Article'] ?? '')) === trim($article))
+            ->values()
+            ->all();
     }
 
     /**
-     * Ne garde que les lignes dont la colonne "Article" contient un code
-     * valide (un "A" ou un "B" en 5e position — voir ArticleSopal::estValide,
-     * la même règle que pour les commandes).
-     *
-     * Si le fichier n'a pas de colonne "Article", rien n'est filtré : mieux
-     * vaut tout afficher que vider silencieusement un import au format
-     * inattendu.
+     * Quantité en stock par article, d'après l'import le plus récent.
+     * Conservée ici parce que tout le site l'appelle par ce nom ; le calcul
+     * lui-même est dans StockStore.
      */
-    private static function filtrerArticlesValides(array $colonnes, array $lignes): array
+    public static function quantitesParArticle(): array
     {
-        $colonneArticle = collect($colonnes)
-            ->first(fn ($c) => self::normaliserLabel($c['label']) === 'article');
-
-        if (!$colonneArticle) {
-            return $lignes;
-        }
-
-        return array_values(array_filter(
-            $lignes,
-            fn (array $l) => ArticleSopal::estValide($l[$colonneArticle['key']] ?? null)
-        ));
-    }
-
-    /** Compare des noms de colonnes en ignorant accents/espaces/tirets/casse (même logique que basestock.py). */
-    private static function normaliserLabel(?string $label): string
-    {
-        $sansAccents = iconv('UTF-8', 'ASCII//TRANSLIT', (string) $label);
-        $sansAccents = $sansAccents !== false ? $sansAccents : (string) $label;
-
-        return strtolower(preg_replace('/[^a-zA-Z0-9]+/', '', $sansAccents));
-    }
-
-    /** Lit la ligne JSON affichée par basestock.py sur sa sortie standard pour en extraire le titre (date/heure du stock). */
-    private static function extraireTitre(string $sortieScript): ?string
-    {
-        $derniereLigne = trim(collect(explode("\n", trim($sortieScript)))->last() ?? '');
-        $donnees = json_decode($derniereLigne, true);
-
-        return $donnees['titre'] ?? null;
-    }
-
-    /** Ne garde que les HISTORIQUE_MAX imports les plus récents. */
-    private static function purgerAncienHistorique(string $dossier): void
-    {
-        $fichiers = glob($dossier.'/*.json') ?: [];
-        usort($fichiers, fn ($a, $b) => filemtime($b) <=> filemtime($a));
-
-        foreach (array_slice($fichiers, self::HISTORIQUE_MAX) as $ancien) {
-            @unlink($ancien);
-        }
-    }
-
-    /** Lit un .xlsx et retourne [colonnes, lignes] au même format que le reste de l'app. */
-    private static function lireXlsx(string $chemin): array
-    {
-        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($chemin);
-        $feuille = $spreadsheet->getActiveSheet();
-        $lignesBrutes = $feuille->toArray(null, true, true, false);
-
-        if (empty($lignesBrutes)) {
-            return [[], []];
-        }
-
-        $entetes = array_map(
-            fn ($e, $i) => (string) ($e !== null && $e !== '' ? $e : "Colonne {$i}"),
-            $lignesBrutes[0],
-            array_keys($lignesBrutes[0])
-        );
-
-        $lignesDonnees = array_slice($lignesBrutes, 1);
-
-        $lignes = [];
-        foreach ($lignesDonnees as $index => $ligne) {
-            $objet = ['_id' => $index];
-            foreach ($entetes as $i => $label) {
-                $objet["col_{$i}"] = $ligne[$i] ?? '';
-            }
-            $lignes[] = $objet;
-        }
-
-        $colonnes = [];
-        foreach ($entetes as $i => $label) {
-            $valeurs = collect(array_column($lignesDonnees, $i))->filter(fn ($v) => $v !== '' && $v !== null);
-            $numerique = $valeurs->isNotEmpty() && $valeurs->every(fn ($v) => is_numeric($v));
-            $colonnes[] = ['key' => "col_{$i}", 'label' => $label, 'numeric' => $numerique];
-        }
-
-        return [$colonnes, $lignes];
+        return StockStore::quantitesParArticle();
     }
 }

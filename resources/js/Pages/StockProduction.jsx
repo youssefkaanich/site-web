@@ -15,6 +15,8 @@ import {
 } from '../Components/Icons';
 import { useResizableColumns } from '../hooks/useResizableColumns';
 import { trouverColonne } from '../utils/colonnesStock';
+import VuesStockHistorique from '../Components/StockHistoriqueVues';
+import ImportsStock from '../Components/ImportsStock';
 
 const LARGEUR_COLONNE = 150;
 const LIGNES_PAR_PAGE = 50;
@@ -53,7 +55,19 @@ function formaterDate(iso) {
     });
 }
 
-export default function StockProduction() {
+export default function StockProduction({
+    historiquePret = false,
+    historiqueErreur = null,
+    reference = null,
+    mouvements = null,
+    articlesHistorique = [],
+    importsMouvements = [],
+    variationsMouvements = { import: null, variations: {} },
+}) {
+    // Deux sections sur cette page : le tableau du dernier import de stock, et
+    // les courbes reconstituées à partir des mouvements. L'IMPORT des fichiers,
+    // lui, se fait sur la page Stock historique.
+    const [section, setSection] = useState('tableau');
     const sauvegarde = chargerDepuisStockage();
     const [idActif, setIdActif] = useState(sauvegarde?.id ?? null);
     const [nomFichier, setNomFichier] = useState(sauvegarde?.nomFichier ?? null);
@@ -199,17 +213,34 @@ export default function StockProduction() {
                     article: code,
                     designation: colonneDesignation ? ligne[colonneDesignation.key] : '',
                     nombreEmplacements: 0,
+                    quantiteFichier: 0,
                     quantiteTotale: 0,
                 });
             }
             const groupe = groupes.get(code);
             groupe.nombreEmplacements += 1;
             if (colonneQte) {
-                groupe.quantiteTotale += Number(ligne[colonneQte.key]) || 0;
+                groupe.quantiteFichier += Number(ligne[colonneQte.key]) || 0;
             }
         }
+
+        // Stock A JOUR = quantite du fichier + mouvements enregistres depuis.
+        // Les variations ne valent que pour l'import de stock actif : les
+        // appliquer a un import plus ancien rechargé depuis l'historique
+        // donnerait un chiffre faux.
+        const aJour = variationsMouvements?.import && variationsMouvements.import === idActif;
+
+        for (const groupe of groupes.values()) {
+            groupe.variation = aJour ? variationsMouvements.variations[groupe.article] ?? 0 : 0;
+            groupe.quantiteTotale = groupe.quantiteFichier + groupe.variation;
+        }
+
         return Array.from(groupes.values());
-    }, [lignes, colonneArticle, colonneDesignation, colonneQte]);
+    }, [lignes, colonneArticle, colonneDesignation, colonneQte, variationsMouvements, idActif]);
+
+    // Vrai seulement si l'import affiché est celui auquel se rapportent les
+    // mouvements : sert a nommer honnetement la colonne.
+    const stockAJour = Boolean(variationsMouvements?.import) && variationsMouvements.import === idActif;
 
     const modeGroupe = lignesGroupees !== null;
 
@@ -267,15 +298,80 @@ export default function StockProduction() {
               { key: 'article', label: 'Article', numeric: false },
               { key: 'designation', label: 'Désignation', numeric: false },
               { key: 'nombreEmplacements', label: 'Emplacements', numeric: true },
-              ...(colonneQte ? [{ key: 'quantiteTotale', label: 'Quantité totale', numeric: true }] : []),
+              ...(colonneQte
+                  ? [
+                        {
+                            key: 'quantiteTotale',
+                            label: stockAJour ? 'Stock final' : 'Quantité totale',
+                            numeric: true,
+                        },
+                    ]
+                  : []),
           ]
         : colonnes;
 
     return (
         <AppLayout
             title="Stock / Production"
-            subtitle="Importe un fichier Excel : il est nettoyé et filtré automatiquement, puis gardé dans l'historique (les 10 derniers imports) pour pouvoir y revenir."
+            subtitle="Le stock final : la photo du dernier import, à laquelle sont ajoutés tous les mouvements enregistrés depuis."
         >
+            {/* Bascule entre le tableau de stock et les courbes historiques */}
+            <div className="flex flex-wrap gap-1.5 mb-6 border-b border-gray-200 dark:border-gray-800">
+                {[
+                    { cle: 'tableau', libelle: 'Stock du dernier import' },
+                    { cle: 'historique', libelle: 'Courbes et stock à une date' },
+                    { cle: 'fichiers', libelle: 'Fichiers importés' },
+                ].map((o) => (
+                    <button
+                        key={o.cle}
+                        type="button"
+                        onClick={() => setSection(o.cle)}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                            section === o.cle
+                                ? 'border-[#0d2b52] text-[#0d2b52] dark:border-blue-400 dark:text-blue-300'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        {o.libelle}
+                    </button>
+                ))}
+            </div>
+
+            {section === 'fichiers' ? (
+                <ImportsStock
+                    pret={historiquePret}
+                    erreur={historiqueErreur}
+                    reference={reference}
+                    mouvements={mouvements}
+                    importsMouvements={importsMouvements}
+                />
+            ) : section === 'historique' ? (
+                historiquePret ? (
+                    <VuesStockHistorique
+                        reference={reference}
+                        mouvements={mouvements}
+                        articles={articlesHistorique}
+                    />
+                ) : (
+                    <div className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 p-6 text-center">
+                        <p className="text-sm text-amber-900 dark:text-amber-200">{historiqueErreur}</p>
+                        <a
+                            href="/stock-historique"
+                            className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90 transition-all"
+                        >
+                            Importer les fichiers
+                        </a>
+                    </div>
+                )
+            ) : (
+            <>
+            {stockAJour && (
+                <div className="mb-5 rounded-xl border border-[#0d2b52]/15 dark:border-blue-400/25 bg-[#0d2b52]/[0.04] dark:bg-blue-400/[0.07] px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+                    La colonne <strong>Stock final</strong> montre le stock réel : la quantité du fichier de stock
+                    <strong> plus</strong> les mouvements enregistrés depuis. C'est ce chiffre qui sert de base avant de
+                    servir une commande.
+                </div>
+            )}
             <div className="flex flex-wrap items-center gap-3 mb-6">
                 <label
                     className={`px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90 hover:shadow-md hover:shadow-[#0d2b52]/20 cursor-pointer flex items-center gap-2 transition-all ${
@@ -519,6 +615,8 @@ export default function StockProduction() {
                         </div>
                     )}
                 </div>
+            )}
+            </>
             )}
         </AppLayout>
     );

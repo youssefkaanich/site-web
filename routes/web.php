@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommandeController;
 use App\Http\Controllers\ExtractionController;
 use App\Http\Controllers\StockController;
+use App\Http\Controllers\StockHistoriqueController;
 
 Route::redirect('/', '/commandes');
 
@@ -65,6 +66,21 @@ Route::middleware('auth')->group(function () {
     Route::get('/stock-production/{id}/articles/{article}', [StockController::class, 'article'])
         ->where('article', '[^/]+')
         ->name('stockProduction.article');
+
+    // Stock historique : reconstitution du stock à n'importe quelle date, à
+    // partir du fichier de stock (photo) et du fichier de mouvements.
+    //
+    // Il n'y a plus de PAGE dédiée : import et consultation se font dans
+    // Stock / Production. Seuls subsistent les points d'accès aux données,
+    // appelés en JavaScript par cette page. L'ancienne adresse redirige, pour
+    // ne pas casser un favori.
+    Route::redirect('/stock-historique', '/stock-production');
+    Route::post('/stock-historique/importer', [StockHistoriqueController::class, 'importer'])->name('stockHistorique.importer');
+    Route::delete('/stock-historique/imports/{id}', [StockHistoriqueController::class, 'supprimer'])->name('stockHistorique.supprimer');
+    Route::get('/stock-historique/article', [StockHistoriqueController::class, 'article'])->name('stockHistorique.article');
+    Route::get('/stock-historique/evolution', [StockHistoriqueController::class, 'evolution'])->name('stockHistorique.evolution');
+    Route::get('/stock-historique/tous', [StockHistoriqueController::class, 'tous'])->name('stockHistorique.tous');
+
     Route::get('/analyse', [CommandeController::class, 'analyse'])->name('analyse');
 
     // Anciennes URL (avant renommage) : redirigent vers les nouvelles pour ne pas casser les favoris/liens.

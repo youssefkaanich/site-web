@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Accès aux commandes, stockées dans la table MySQL `commandes` (base
- * "sopal", XAMPP) via le modèle Eloquent Commande — remplace l'ancienne
+ * "sopal_commandes", XAMPP) via le modèle Eloquent Commande — remplace l'ancienne
  * version Firestore (abandonnée : le quota gratuit Google était trop vite
  * dépassé avec le rafraîchissement automatique de la page Gestion).
  *

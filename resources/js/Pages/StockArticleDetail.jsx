@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 import BadgeJob from '../Components/BadgeJob';
@@ -9,6 +9,7 @@ const ONGLETS = [
     { key: 'infos', label: 'Infos générales' },
     { key: 'emplacements', label: 'Emplacements' },
     { key: 'commandes', label: 'Commandes liées' },
+    { key: 'mouvements', label: 'Mouvements par heure' },
 ];
 
 export default function StockArticleDetail({
@@ -22,6 +23,9 @@ export default function StockArticleDetail({
     commandesLiees = [],
     nonTrouveEnStock = false,
     qteServie = 0,
+    mouvementsParHeure = [],
+    mouvementsDetail = [],
+    stockDerniereDate = null,
 }) {
     const [ongletActif, setOngletActif] = useState('infos');
 
@@ -38,10 +42,31 @@ export default function StockArticleDetail({
             ? lignes.reduce((total, ligne) => total + (Number(ligne[colonneQte.key]) || 0), 0)
             : null;
 
-    // Quantité réellement disponible = fichier − ce qui a déjà été servi
-    // depuis la page Analyse (voir ServiceStore). Même calcul que là-bas,
-    // sinon les deux pages afficheraient des chiffres différents.
-    const quantiteTotale = quantiteFichier === null ? null : quantiteFichier - qteServie;
+    // Quantité affichée = stock À LA DERNIÈRE DATE CONNUE.
+    //
+    // La quantité du fichier de stock est une photo : elle est périmée dès
+    // qu'un mouvement a eu lieu. On lui ajoute donc les entrées/sorties
+    // enregistrées depuis (stockDerniereDate), puis on retire ce qui a déjà
+    // été servi depuis la page Analyse — même calcul que là-bas, sinon les
+    // deux pages afficheraient des chiffres différents.
+    const baseStock = stockDerniereDate ? stockDerniereDate.stock : quantiteFichier;
+    const quantiteTotale = baseStock === null ? null : baseStock - qteServie;
+
+    const formaterInstantCourt = (iso) => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return null;
+        return d.toLocaleString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
+    const nombre = (v) =>
+        v === null || v === undefined ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(v);
 
     // Colonnes affichées dans l'onglet "Emplacements" : tout sauf le code article (déjà dans le titre).
     const colonnesEmplacements = colonnes.filter((c) => c.key !== colonneArticleKey);
@@ -91,6 +116,11 @@ export default function StockArticleDetail({
                         {onglet.key === 'commandes' && commandesLiees.length > 0 && (
                             <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">({commandesLiees.length})</span>
                         )}
+                        {onglet.key === 'mouvements' && mouvementsDetail.length > 0 && (
+                            <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">
+                                ({mouvementsDetail.length})
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -103,15 +133,59 @@ export default function StockArticleDetail({
                         <p className="text-4xl font-extrabold mt-2 text-[#0d2b52] dark:text-white">{lignes.length}</p>
                     </div>
                     {quantiteTotale !== null && (
-                        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm">
+                        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm sm:col-span-2">
                             <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                                {qteServie > 0 ? 'Quantité disponible' : 'Quantité totale'}
+                                {stockDerniereDate ? 'Stock à la dernière date connue' : 'Quantité totale'}
                             </p>
-                            <p className="text-4xl font-extrabold mt-2 text-[#0d2b52] dark:text-white">{quantiteTotale}</p>
-                            {qteServie > 0 && (
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                                    {quantiteFichier} au fichier − {qteServie} déjà servi(s)
-                                </p>
+                            <p className="text-4xl font-extrabold mt-2 text-[#0d2b52] dark:text-white">
+                                {nombre(quantiteTotale)}
+                            </p>
+
+                            {/* Décomposition : le chiffre affiché ne doit jamais
+                                sortir de nulle part. */}
+                            {stockDerniereDate ? (
+                                <div className="mt-3 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="tabular-nums">
+                                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                            {nombre(stockDerniereDate.reference)}
+                                        </span>{' '}
+                                        au fichier de stock du{' '}
+                                        {formaterInstantCourt(stockDerniereDate.instantReference)}
+                                    </p>
+                                    {stockDerniereDate.nombreMouvements > 0 && (
+                                        <p className="tabular-nums">
+                                            <span
+                                                className={`font-semibold ${
+                                                    stockDerniereDate.variation < 0
+                                                        ? 'text-rose-600 dark:text-rose-400'
+                                                        : 'text-emerald-600 dark:text-emerald-400'
+                                                }`}
+                                            >
+                                                {stockDerniereDate.variation > 0 ? '+' : ''}
+                                                {nombre(stockDerniereDate.variation)}
+                                            </span>{' '}
+                                            de mouvements ({stockDerniereDate.nombreMouvements}) jusqu'au{' '}
+                                            {formaterInstantCourt(stockDerniereDate.derniereDate)}
+                                        </p>
+                                    )}
+                                    {qteServie > 0 && (
+                                        <p className="tabular-nums">
+                                            <span className="font-semibold text-rose-600 dark:text-rose-400">
+                                                −{nombre(qteServie)}
+                                            </span>{' '}
+                                            déjà servi(s) depuis la page Analyse
+                                        </p>
+                                    )}
+                                    {stockDerniereDate.nombreMouvements === 0 && (
+                                        <p>Aucun mouvement depuis cette date : le stock n'a pas bougé.</p>
+                                    )}
+                                </div>
+                            ) : (
+                                qteServie > 0 && (
+                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                                        {nombre(quantiteFichier)} au fichier − {nombre(qteServie)} déjà servi(s)
+                                    </p>
+                                )
                             )}
                         </div>
                     )}
@@ -235,6 +309,204 @@ export default function StockArticleDetail({
                     </div>
                 )
             )}
+
+            {/* Onglet : Mouvements par heure */}
+            {ongletActif === 'mouvements' && (
+                <MouvementsParHeure parHeure={mouvementsParHeure} detail={mouvementsDetail} />
+            )}
         </AppLayout>
+    );
+}
+
+/* ==================================================================
+   Mouvements de stock de l'article, regroupés par heure.
+
+   Le fichier ERP enregistre chaque sortie à la minute près : sur un article
+   très mouvementé, la liste brute est illisible. Le regroupement horaire
+   montre le rythme réel (quelles heures de la journée bougent), et le détail
+   ligne à ligne reste accessible juste en dessous.
+   ================================================================== */
+
+function MouvementsParHeure({ parHeure, detail }) {
+    const [heureOuverte, setHeureOuverte] = useState(null);
+
+    if (!parHeure.length) {
+        return (
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 text-center">
+                <IconInbox className="h-8 w-8 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Aucun mouvement de stock pour cet article.
+                </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Importe le fichier « Mouvements de stock » depuis la page Stock historique.
+                </p>
+            </div>
+        );
+    }
+
+    const nombre = (v, d = 2) =>
+        v === null || v === undefined ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: d }).format(v);
+
+    const libelleHeure = (h) => {
+        const d = new Date(h.replace(' ', 'T'));
+        if (Number.isNaN(d.getTime())) return h;
+        const jour = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        return `${jour} à ${String(d.getHours()).padStart(2, '0')} h`;
+    };
+
+    // Totaux sur toute la période couverte par le fichier.
+    const totalEntrees = parHeure.reduce((s, l) => s + l.entrees, 0);
+    const totalSorties = parHeure.reduce((s, l) => s + l.sorties, 0);
+    const amplitudeMax = Math.max(...parHeure.map((l) => Math.abs(l.variation)), 1);
+
+    return (
+        <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-4">
+                {[
+                    { libelle: 'Heures avec activité', valeur: nombre(parHeure.length, 0) },
+                    { libelle: 'Mouvements', valeur: nombre(detail.length, 0) },
+                    { libelle: 'Total entrées', valeur: `+${nombre(totalEntrees)}`, couleur: 'text-emerald-600 dark:text-emerald-400' },
+                    { libelle: 'Total sorties', valeur: nombre(totalSorties), couleur: 'text-rose-600 dark:text-rose-400' },
+                ].map((c) => (
+                    <div
+                        key={c.libelle}
+                        className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4"
+                    >
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            {c.libelle}
+                        </p>
+                        <p className={`mt-1 text-2xl font-bold tabular-nums ${c.couleur ?? 'text-gray-800 dark:text-gray-100'}`}>
+                            {c.valeur}
+                        </p>
+                    </div>
+                ))}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+                    <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-100">Activité heure par heure</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Clique sur une heure pour voir les mouvements qu'elle contient.
+                    </p>
+                </div>
+
+                <div className="max-h-[520px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                <th className="px-4 py-2.5">Heure</th>
+                                <th className="px-4 py-2.5 text-right">Entrées</th>
+                                <th className="px-4 py-2.5 text-right">Sorties</th>
+                                <th className="px-4 py-2.5 text-right">Net</th>
+                                <th className="px-4 py-2.5 w-40">Amplitude</th>
+                                <th className="px-4 py-2.5 text-right">Mvts</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {parHeure.map((l) => {
+                                const ouverte = heureOuverte === l.heure;
+                                const lignesDeLHeure = ouverte
+                                    ? detail.filter((m) => m.instant.slice(0, 13) === l.heure.slice(0, 13).replace(' ', 'T'))
+                                    : [];
+
+                                return (
+                                    <Fragment key={l.heure}>
+                                        <tr
+                                            onClick={() => setHeureOuverte(ouverte ? null : l.heure)}
+                                            className={`cursor-pointer transition-colors ${
+                                                ouverte
+                                                    ? 'bg-blue-50 dark:bg-gray-800'
+                                                    : 'hover:bg-gray-50 dark:hover:bg-gray-800/60'
+                                            }`}
+                                        >
+                                            <td className="px-4 py-2 text-gray-800 dark:text-gray-200 tabular-nums whitespace-nowrap">
+                                                {libelleHeure(l.heure)}
+                                            </td>
+                                            <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                                                {l.entrees > 0 ? `+${nombre(l.entrees)}` : '—'}
+                                            </td>
+                                            <td className="px-4 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400">
+                                                {l.sorties < 0 ? nombre(l.sorties) : '—'}
+                                            </td>
+                                            <td
+                                                className={`px-4 py-2 text-right font-semibold tabular-nums ${
+                                                    l.variation < 0
+                                                        ? 'text-rose-600 dark:text-rose-400'
+                                                        : l.variation > 0
+                                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                                        : 'text-gray-400'
+                                                }`}
+                                            >
+                                                {l.variation > 0 ? '+' : ''}
+                                                {nombre(l.variation)}
+                                            </td>
+                                            {/* Barre proportionnelle : repère visuel du poids de l'heure */}
+                                            <td className="px-4 py-2">
+                                                <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full ${
+                                                            l.variation < 0 ? 'bg-rose-400' : 'bg-emerald-400'
+                                                        }`}
+                                                        style={{
+                                                            width: `${Math.max(3, (Math.abs(l.variation) / amplitudeMax) * 100)}%`,
+                                                        }}
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">
+                                                {l.nombre}
+                                            </td>
+                                        </tr>
+
+                                        {ouverte && (
+                                            <tr className="bg-blue-50/50 dark:bg-gray-800/50">
+                                                <td colSpan={6} className="px-4 py-3">
+                                                    <table className="w-full text-xs">
+                                                        <thead>
+                                                            <tr className="text-left text-gray-500 dark:text-gray-400">
+                                                                <th className="pb-1.5 font-semibold">Heure exacte</th>
+                                                                <th className="pb-1.5 font-semibold">Transaction</th>
+                                                                <th className="pb-1.5 font-semibold">Pièce origine</th>
+                                                                <th className="pb-1.5 font-semibold">Emplacement</th>
+                                                                <th className="pb-1.5 font-semibold text-right">Quantité</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {lignesDeLHeure.map((m, i) => (
+                                                                <tr key={i} className="text-gray-700 dark:text-gray-300">
+                                                                    <td className="py-1 tabular-nums">
+                                                                        {new Date(m.instant).toLocaleTimeString('fr-FR', {
+                                                                            hour: '2-digit',
+                                                                            minute: '2-digit',
+                                                                        })}
+                                                                    </td>
+                                                                    <td className="py-1">{m.transaction ?? '—'}</td>
+                                                                    <td className="py-1 font-mono">{m.piece ?? '—'}</td>
+                                                                    <td className="py-1 font-mono">{m.emplacement ?? '—'}</td>
+                                                                    <td
+                                                                        className={`py-1 text-right font-semibold tabular-nums ${
+                                                                            m.quantite < 0
+                                                                                ? 'text-rose-600 dark:text-rose-400'
+                                                                                : 'text-emerald-600 dark:text-emerald-400'
+                                                                        }`}
+                                                                    >
+                                                                        {m.quantite > 0 ? '+' : ''}
+                                                                        {nombre(m.quantite)}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     );
 }

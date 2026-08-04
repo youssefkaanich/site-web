@@ -15,9 +15,13 @@ class ArticleSopal
 {
     /**
      * Un code article valide a un "A" ou un "B" en 5e position
-     * (ex: 06CZ[A]04-1, 06BA[B]01-1). Les codes qui ne respectent pas ça
-     * viennent presque toujours d'une erreur d'extraction ou d'une ligne
-     * parasite dans le fichier source.
+     * (ex: 06CZ[A]04-1, 06BA[B]01-1).
+     *
+     * CE CARACTÈRE IDENTIFIE UN PRODUIT FINI. Les codes qui ne le respectent
+     * pas sont soit des matières premières et composants (ex: M3000L0
+     * "LINGOT EN LAITON", 0760204-1 "CORPS MITIGEUR EVIER"), soit — dans les
+     * commandes extraites de mails — une erreur de découpage du texte.
+     * Dans les deux cas ils ne doivent pas apparaître.
      *
      * $source == "image-ocr" (commandes extraites d'une image) : toujours
      * valide, quel que soit ce caractère — l'OCR peut le déformer, on préfère

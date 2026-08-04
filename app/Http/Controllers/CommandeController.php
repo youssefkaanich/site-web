@@ -279,8 +279,9 @@ class CommandeController extends Controller
 
         // Suivi Export/Commercial : chaque commande confrontée au stock réel
         // de son article (rapprochement par nom d'article, comme la fiche
-        // article -- voir StockController::quantitesParArticle()).
-        $stock = StockController::quantitesParArticle();
+        // article -- voir StockHistoriqueStore::quantitesFinales(),
+        // qui ajoute les mouvements à la photo de stock).
+        $stock = \App\Services\StockHistoriqueStore::quantitesFinales();
 
         // Les commandes entièrement servies quittent cette vue (elles sont
         // sur la page "Commandes servies").

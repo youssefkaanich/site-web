@@ -9,7 +9,7 @@ class Commande extends Model
 {
     use SoftDeletes;
 
-    /** Table stockée sur XAMPP (base "sopal"), pas la connexion par défaut du site (sqlite). */
+    /** Table stockée sur XAMPP (base "sopal_commandes"), pas la connexion par défaut du site (sqlite). */
     protected $connection = 'mysql';
 
     protected $table = 'commandes';
