@@ -407,6 +407,11 @@ class CommandeController extends Controller
                 'Emetteur' => $c['Emetteur'],
                 'Date_mail' => $c['Date_mail'],
                 'Qte_demandee' => $c['Qte_demandee'],
+                // Nécessaires au classement Export / Chantier / Commercial et
+                // au regroupement par objet — mêmes règles que la page
+                // Commandes (voir classificationCommande.js).
+                'Objet' => $c['Objet'] ?? null,
+                'Texte_Mail' => $c['Texte_Mail'] ?? null,
                 'services' => $historique[$c['id']] ?? [],
             ])->values(),
         ]);
