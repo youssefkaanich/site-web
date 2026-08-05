@@ -143,6 +143,7 @@ class StockStore
             return ['ok' => false, 'erreur' => "L'enregistrement en base a échoué : ".$e->getMessage()];
         }
 
+        StockHistoriqueStore::oublier();
         self::purger();
 
         return ['ok' => true, 'import' => self::contenu($import)];

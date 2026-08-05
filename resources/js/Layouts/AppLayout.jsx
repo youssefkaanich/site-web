@@ -9,6 +9,13 @@ function NavLink({ href, label, active, icon, badge = null }) {
     return (
         <Link
             href={href}
+            // Chargement anticipé au survol : le temps de descendre la souris
+            // jusqu'au lien, la page est déjà en cache et s'affiche
+            // instantanément au clic. Les pages Stock et Analyse mettent
+            // plusieurs centaines de millisecondes à se calculer — c'est là
+            // que ça se voit le plus.
+            prefetch="hover"
+            cacheFor="30s"
             className={`flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm transition-all duration-200 active:scale-[0.98] ${
                 active
                     ? 'bg-white text-[#0d2b52] font-bold shadow-md'
@@ -91,9 +98,30 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
     const { url, props } = usePage();
     const utilisateur = props.auth?.user;
 
-    // Sidebar auto-masquée : se replie quand la souris s'en va, réapparaît en
-    // approchant le bord gauche de l'écran (pas besoin de cliquer sur rien).
-    const [sidebarOuverte, setSidebarOuverte] = useState(true);
+    // Menu latéral : ouvert ou replié, sur DÉCISION de l'utilisateur.
+    //
+    // Il se refermait auparavant dès que la souris le quittait : toute la page
+    // se décalait alors au moindre mouvement, ce qui rendait la lecture
+    // instable. Le choix est maintenant explicite et mémorisé d'une visite à
+    // l'autre.
+    const [sidebarOuverte, setSidebarOuverte] = useState(() => {
+        try {
+            return localStorage.getItem('sopal-menu-replie') !== '1';
+        } catch {
+            return true; // navigation privée : on garde le menu ouvert
+        }
+    });
+
+    function basculerMenu() {
+        setSidebarOuverte((ouverte) => {
+            try {
+                localStorage.setItem('sopal-menu-replie', ouverte ? '1' : '0');
+            } catch {
+                // Stockage indisponible : le choix vaudra pour cette page seulement.
+            }
+            return !ouverte;
+        });
+    }
 
     // Message flash (redirect()->with('erreur'/'succes', ...) côté Laravel,
     // voir HandleInertiaRequests::share()) affiché en toast une seule fois
@@ -112,12 +140,10 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
             <Head title={titleSuffix ? `${title} — ${titleSuffix.texte}` : title} />
 
             <div className="flex h-screen">
-                {/* Sidebar bleu marine, couleur unie + fine bordure (style sobre) — se replie
-                    automatiquement quand la souris s'en va, réapparaît près du bord gauche.
-                    h-screen (pas min-h-screen) : reste plaquée à la hauteur de l'écran et ne
-                    défile JAMAIS avec le contenu, quelle que soit la position du scroll. */}
+                {/* Menu latéral bleu marine. h-screen (pas min-h-screen) : reste plaqué à
+                    la hauteur de l'écran et ne défile JAMAIS avec le contenu, quelle que
+                    soit la position du scroll. */}
                 <aside
-                    onMouseLeave={() => setSidebarOuverte(false)}
                     className={`shrink-0 h-screen bg-[#0d2b52] dark:bg-gray-900 text-white flex flex-col border-r border-black/10 dark:border-white/5 overflow-y-auto overflow-x-hidden transition-[width] duration-200 ${
                         sidebarOuverte ? 'w-64' : 'w-0 border-r-0'
                     }`}
@@ -125,8 +151,25 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                     {/* Carte logo + intitulé de l'outil */}
                     <div className="w-64 px-4 pt-4">
                         <div className="rounded-2xl bg-white/[0.07] border border-white/10 p-4">
-                            <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex justify-center">
+                            <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-center relative">
                                 <img src="/images/logo-sopal.png" alt="Sopal" className="h-10 w-auto" />
+                                <button
+                                    type="button"
+                                    onClick={basculerMenu}
+                                    title="Replier le menu"
+                                    aria-label="Replier le menu"
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-lg text-[#0d2b52]/50 hover:text-[#0d2b52] hover:bg-[#0d2b52]/10 transition-colors"
+                                >
+                                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none">
+                                        <path
+                                            d="M12.5 5 7.5 10l5 5"
+                                            stroke="currentColor"
+                                            strokeWidth="1.8"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                </button>
                             </div>
                             <p className="text-[13px] leading-snug text-blue-100/70 mt-3">
                                 Interface de suivi des commandes et du stock
@@ -180,18 +223,17 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                 </aside>
 
                 {!sidebarOuverte && (
-                    <>
-                        {/* Zone invisible sur le bord gauche : approcher la souris ici rouvre le menu */}
-                        <div
-                            onMouseEnter={() => setSidebarOuverte(true)}
-                            className="fixed top-0 left-0 h-full w-3 z-20"
-                        />
-                        <div className="fixed top-5 left-2 z-10 h-9 w-9 flex items-center justify-center rounded-lg bg-[#0d2b52]/70 dark:bg-gray-900/70 text-white/70 pointer-events-none">
-                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none">
-                                <path d="M7.5 5 12.5 10l-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
-                    </>
+                    <button
+                        type="button"
+                        onClick={basculerMenu}
+                        title="Afficher le menu"
+                        aria-label="Afficher le menu"
+                        className="fixed top-5 left-2 z-30 h-9 w-9 flex items-center justify-center rounded-lg bg-[#0d2b52] dark:bg-gray-800 text-white shadow-lg hover:bg-[#0d2b52]/90 transition-colors"
+                    >
+                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none">
+                            <path d="M7.5 5 12.5 10l-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
                 )}
 
                 {/* Contenu principal : défile verticalement de façon INDÉPENDANTE de la
@@ -199,8 +241,15 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                     overflow-x ici -- le scroll horizontal est géré uniquement par le
                     conteneur du tableau (voir Gestion.jsx), pour ne jamais avoir deux
                     barres de défilement horizontal imbriquées qui se marchent dessus. */}
-                <main className="flex-1 h-screen overflow-y-auto overflow-x-hidden">
-                    <header className={`px-8 pt-8 pb-4 ${sidebarOuverte ? '' : 'pl-16'}`}>
+                {/* pl-14 quand le menu est replié : reserve la place du bouton
+                    d'ouverture, qui sinon recouvre le haut du contenu (le lien
+                    "Retour à ..." des fiches article, par exemple). */}
+                <main
+                    className={`flex-1 h-screen overflow-y-auto overflow-x-hidden transition-[padding] duration-200 ${
+                        sidebarOuverte ? '' : 'pl-14'
+                    }`}
+                >
+                    <header className="px-8 pt-8 pb-4">
                         <h1 className="text-2xl font-extrabold text-[#0d2b52] dark:text-white">
                             {title}
                             {titleSuffix && (

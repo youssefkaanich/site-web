@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import {
     IconFolder,
     IconClock,
@@ -295,8 +295,9 @@ export default function ImportsStock({ pret, erreur, reference, mouvements, impo
                                     return (
                                         <li key={i.id} className="flex items-center gap-2 text-xs">
                                             <IconClock className="h-3 w-3 text-slate-400 shrink-0" />
-                                            <a
+                                            <Link
                                                 href={`/stock-historique?mouvements=${i.id}`}
+                                                preserveScroll
                                                 className={`flex-1 truncate hover:underline ${
                                                     actif
                                                         ? 'font-semibold text-[#0d2b52] dark:text-blue-300'
@@ -306,7 +307,7 @@ export default function ImportsStock({ pret, erreur, reference, mouvements, impo
                                                 {i.nomFichier} — {formaterNombre(i.nombreMouvements, 0)} mvts
                                                 {i.fin &&
                                                     ` (jusqu'au ${new Date(i.fin * 1000).toLocaleDateString('fr-FR')})`}
-                                            </a>
+                                            </Link>
                                             {actif && (
                                                 <span className="shrink-0 rounded-full bg-[#0d2b52] px-2 py-0.5 text-[10px] font-semibold text-white">
                                                     utilisé

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 import FiltreColonne, { valeursDistinctes } from '../Components/FiltreColonne';
 import { IconCheck, IconClock, IconLoader } from '../Components/Icons';
@@ -309,12 +309,13 @@ function TableauSuivi({ suivi, stockSource }) {
                             >
                                 <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800">
                                     {l.Article ? (
-                                        <a
+                                        <Link
                                             href={`/stock-production/articles/${encodeURIComponent(l.Article)}`}
+                                            prefetch="hover"
                                             className="font-mono font-semibold text-[#0d2b52] dark:text-blue-300 hover:underline"
                                         >
                                             {l.Article}
-                                        </a>
+                                        </Link>
                                     ) : (
                                         '—'
                                     )}

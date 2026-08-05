@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 import {
     IconFolder,
@@ -355,12 +355,13 @@ export default function StockProduction({
                 ) : (
                     <div className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 p-6 text-center">
                         <p className="text-sm text-amber-900 dark:text-amber-200">{historiqueErreur}</p>
-                        <a
-                            href="/stock-historique"
+                        <button
+                            type="button"
+                            onClick={() => setSection('fichiers')}
                             className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#0d2b52] hover:bg-[#0d2b52]/90 transition-all"
                         >
                             Importer les fichiers
-                        </a>
+                        </button>
                     </div>
                 )
             ) : (

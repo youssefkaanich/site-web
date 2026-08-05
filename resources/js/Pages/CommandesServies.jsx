@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 import BadgeJob from '../Components/BadgeJob';
 import { IconRestore, IconInbox } from '../Components/Icons';
@@ -48,12 +48,13 @@ export default function CommandesServies({ commandes = [] }) {
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <a
+                                        <Link
                                             href={`/stock-production/articles/${encodeURIComponent(c.Article || '')}`}
+                                            prefetch="hover"
                                             className="font-mono font-bold text-[#0d2b52] dark:text-blue-300 hover:underline"
                                         >
                                             {c.Article || '(sans article)'}
-                                        </a>
+                                        </Link>
                                         {c.Job && <BadgeJob job={c.Job} />}
                                         {c.Qte_demandee && (
                                             <span className="text-xs text-gray-500 dark:text-gray-400">

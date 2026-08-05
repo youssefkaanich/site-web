@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from '@inertiajs/react';
 import axios from 'axios';
 import CourbeEvolution from './CourbeEvolution';
 import {
@@ -553,12 +554,13 @@ function VueTous({ minChamp, finMouvements }) {
                                 {visibles.map((l) => (
                                     <tr key={l.article} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
                                         <td className="px-4 py-2 font-medium text-slate-800 dark:text-slate-100">
-                                            <a
+                                            <Link
                                                 href={`/stock-production/articles/${encodeURIComponent(l.article)}`}
+                                                prefetch="hover"
                                                 className="hover:underline"
                                             >
                                                 {l.article}
-                                            </a>
+                                            </Link>
                                             {!l.presentEnReference && (
                                                 <span
                                                     className="ml-1.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
