@@ -1,0 +1,272 @@
+========================================================================
+  SOPAL — REMETTRE TOUT LE PROJET EN MARCHE
+  Toutes les commandes a taper dans l'invite de commandes (cmd)
+========================================================================
+
+  Le projet est en DEUX morceaux, dans deux depots differents :
+
+    C:\STAGE\sopal-web        le site web        github.com/youssefkaanich/site-web
+    C:\STAGE\projet sopal     les scripts Python github.com/youssefkaanich/ia-agent
+
+  Le site NE FONCTIONNE PAS sans les scripts Python : ce sont eux qui
+  lisent les fichiers Excel et les mails.
+
+  ATTENTION : git NE TRANSPORTE PAS tout. Ces elements sont volontairement
+  exclus du depot et doivent etre recrees sur la machine :
+
+      .env              contient les mots de passe
+      vendor\           bibliotheques PHP      -> composer install
+      node_modules\     bibliotheques JS       -> npm ci
+      public\build\     le site compile        -> npm run build
+
+  C'est la cause n°1 d'un site qui "ne demarre pas" apres un git clone.
+
+
+========================================================================
+  A — SI TU REPARS D'UN PC QUI A DEJA TOUT (cas le plus courant)
+========================================================================
+
+  Tu veux juste recuperer la derniere version et relancer.
+
+  ----- 1. Recuperer le code -----
+
+    cd /d C:\STAGE\sopal-web
+    git pull origin stock-historique
+
+    cd /d "C:\STAGE\projet sopal"
+    git pull origin master
+
+  ----- 2. Mettre a jour les dependances -----
+
+    cd /d C:\STAGE\sopal-web
+    composer install
+    npm ci
+
+  ----- 3. Appliquer les nouvelles tables de la base -----
+
+    php artisan migrate --force
+
+  ----- 4. COMPILER LE SITE  (etape la plus souvent oubliee) -----
+
+    npm run build
+
+    Sans cette commande, le site affiche l'ANCIENNE version : il tourne
+    sur le dossier public\build, pas sur les fichiers sources.
+
+  ----- 5. Demarrer -----
+
+    Lancer XAMPP  ->  C:\xammppp  ->  bouton Start de MySQL
+
+    cd /d C:\STAGE\sopal-web
+    php artisan serve
+
+    Puis ouvrir :  http://127.0.0.1:8000
+
+  C'est tout. La suite ne sert que sur une machine neuve.
+
+
+========================================================================
+  B — INSTALLATION COMPLETE SUR UNE MACHINE NEUVE
+========================================================================
+
+  ----- 1. Verifier que les outils sont installes -----
+
+    php -v
+    composer -V
+    node -v
+    npm -v
+    python --version
+    git --version
+
+    Si l'un repond "n'est pas reconnu", il faut l'installer ou l'ajouter
+    au PATH avant de continuer.
+
+  ----- 2. Recuperer les deux depots -----
+
+    mkdir C:\STAGE
+    cd /d C:\STAGE
+
+    git clone https://github.com/youssefkaanich/site-web.git sopal-web
+    git clone https://github.com/youssefkaanich/ia-agent.git "projet sopal"
+
+    cd /d C:\STAGE\sopal-web
+    git checkout stock-historique
+
+  ----- 3. Le fichier .env  (ABSENT DU DEPOT, a creer) -----
+
+    copy .env.example .env
+    php artisan key:generate
+
+    Puis OUVRIR .env avec le Bloc-notes et remplir :
+
+        SOPAL_DB_DATABASE=sopal_commandes
+        SOPAL_DB_USERNAME=root
+        SOPAL_DB_PASSWORD=            (vide sur XAMPP par defaut)
+        SOPAL_APP_PASSWORD=           (mot de passe d'application Gmail)
+        CEREBRAS_API_KEY=             (cle API Cerebras)
+
+    Sans SOPAL_DB_DATABASE, le site demarre mais toutes les pages
+    Commandes et Stock tombent en erreur.
+
+  ----- 4. Installer les dependances -----
+
+    composer install
+    npm ci
+
+  ----- 5. Creer la base de donnees -----
+
+    Lancer XAMPP  ->  C:\xammppp  ->  Start de MySQL
+    Puis :
+
+    "C:\xammppp\mysql\bin\mysql.exe" -u root -e "CREATE DATABASE IF NOT EXISTS sopal_commandes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+    php artisan migrate --force
+
+  ----- 6. Creer un utilisateur pour se connecter au site -----
+
+    php artisan tinker
+
+    Puis coller cette ligne, valider, et taper exit :
+
+      App\Models\User::create(['name'=>'admin','email'=>'admin@sopal.com','password'=>bcrypt('admin')]);
+
+  ----- 7. Compiler le site -----
+
+    npm run build
+
+  ----- 8. Les scripts Python -----
+
+    cd /d "C:\STAGE\projet sopal"
+    python -m venv .venv
+    .venv\Scripts\activate
+    pip install -r requirements.txt
+
+    Verifier que le Python DU PATH (celui qu'utilise le site) a bien les
+    bibliotheques de lecture Excel :
+
+    python -c "import pandas, xlrd, openpyxl; print('OK')"
+
+    Si ca echoue :
+
+    pip install pandas xlrd openpyxl
+
+    IMPORTANT : le site lance "python" depuis le PATH, PAS depuis le
+    .venv. Les deux doivent donc avoir pandas et xlrd.
+
+  ----- 9. Variables d'environnement systeme -----
+
+    Ouvrir un cmd EN ADMINISTRATEUR :
+
+    setx SOPAL_APP_PASSWORD "ton_mot_de_passe_application_gmail" /M
+    setx CEREBRAS_API_KEY "ta_cle_cerebras" /M
+
+    Fermer et rouvrir le cmd pour qu'elles soient prises en compte.
+
+  ----- 10. Demarrer -----
+
+    cd /d C:\STAGE\sopal-web
+    php artisan serve
+
+    http://127.0.0.1:8000
+
+
+========================================================================
+  C — FUSIONNER LA BRANCHE DANS main
+========================================================================
+
+  Le travail est actuellement sur la branche "stock-historique".
+  Pour le passer sur main :
+
+    cd /d C:\STAGE\sopal-web
+    git checkout main
+    git pull origin main
+    git merge stock-historique
+    git push origin main
+
+  Ou, plus sur, via GitHub :
+  https://github.com/youssefkaanich/site-web/pull/new/stock-historique
+
+
+========================================================================
+  D — UTILISATION AU QUOTIDIEN
+========================================================================
+
+  A chaque demarrage de la journee :
+
+    1. XAMPP (C:\xammppp) -> Start MySQL
+    2. cd /d C:\STAGE\sopal-web
+       php artisan serve
+    3. http://127.0.0.1:8000
+
+  Pour l'extraction des mails, en plus :
+
+    cd /d "C:\STAGE\projet sopal"
+    lancer_tout.bat
+
+  Ce fichier demarre Ollama, le site et la surveillance Gmail d'un coup.
+
+  IMPORTER LES FICHIERS EXCEL :
+    Page "Stock / Production" -> onglet "Fichiers importes"
+      Fichier 1 : le stock       (INVLISTELOCALL...)
+      Fichier 2 : les mouvements (MVTSTOTRSVCR...)
+
+
+========================================================================
+  E — REFLEXES QUAND QUELQUE CHOSE NE MARCHE PAS
+========================================================================
+
+  "J'ai modifie le site mais rien ne change a l'ecran"
+      -> npm run build
+      Le site tourne sur public\build, pas sur les fichiers sources.
+      C'est de tres loin l'erreur la plus frequente.
+
+  "Unknown database 'sopal'"  ou  "Base of table doesn't exist"
+      -> MySQL n'est pas demarre, ou la base n'existe pas.
+         Verifier XAMPP, puis :  php artisan migrate --force
+
+  "no such table: sessions"
+      -> Le .env melange les DB_* et les SOPAL_DB_*.
+         DB_CONNECTION doit rester sqlite.
+         Seules les variables SOPAL_DB_* concernent MySQL.
+
+  "Class ... not found"  ou  "vendor/autoload.php not found"
+      -> composer install
+
+  "Vite manifest not found"
+      -> npm ci   puis   npm run build
+
+  "Failed to open stream" sur un script Python
+      -> Le dossier "C:\STAGE\projet sopal" est absent ou mal nomme.
+         Le chemin est ecrit en dur dans StockStore et MouvementStore.
+
+  L'import du fichier de mouvements echoue
+      -> python -c "import xlrd; print(xlrd.__version__)"
+         Si erreur :  pip install xlrd
+
+  Le site est lent au premier chargement
+      -> Normal : Laravel compile ses caches. Les suivants sont rapides.
+         Pour aller plus vite en production :
+         php artisan config:cache
+         php artisan route:cache
+
+  Tout remettre a plat sans perdre les donnees :
+      php artisan cache:clear
+      php artisan config:clear
+      php artisan route:clear
+      php artisan view:clear
+      npm run build
+
+
+========================================================================
+  F — RAPPEL IMPORTANT SUR XAMPP
+========================================================================
+
+  Il y a eu DEUX installations XAMPP sur cette machine. La bonne est :
+
+      C:\xammppp        (trois "p" a la fin)
+
+  C:\xampp a ete renomme en C:\xampp_A_SUPPRIMER_2026-08-03 et peut etre
+  efface. Si un jour "php" n'est plus reconnu, verifier que le PATH
+  contient bien C:\xammppp\php.
+
+========================================================================
