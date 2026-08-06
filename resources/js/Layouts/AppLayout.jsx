@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Toaster from '../Components/Toaster';
 import { IconSun, IconMoon, IconPower } from '../Components/Icons';
@@ -98,30 +98,60 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
     const { url, props } = usePage();
     const utilisateur = props.auth?.user;
 
-    // Menu latéral : ouvert ou replié, sur DÉCISION de l'utilisateur.
-    //
-    // Il se refermait auparavant dès que la souris le quittait : toute la page
-    // se décalait alors au moindre mouvement, ce qui rendait la lecture
-    // instable. Le choix est maintenant explicite et mémorisé d'une visite à
-    // l'autre.
-    const [sidebarOuverte, setSidebarOuverte] = useState(() => {
+    /*
+     * Menu latéral à deux comportements :
+     *
+     *   ÉPINGLÉ  — il occupe sa place, le contenu commence à sa droite.
+     *   REPLIÉ   — il se rétracte et réapparaît AU SURVOL du bord gauche.
+     *
+     * Replié, il s'affiche EN SUPERPOSITION du contenu et non en le poussant.
+     * C'est le point important : la version précédente redimensionnait la page
+     * à chaque passage de souris, et tout le texte sautait. Ici le contenu ne
+     * bouge jamais, seul le menu glisse par-dessus.
+     *
+     * Le choix épinglé/replié est mémorisé d'une visite à l'autre.
+     */
+    const [epingle, setEpingle] = useState(() => {
         try {
             return localStorage.getItem('sopal-menu-replie') !== '1';
         } catch {
             return true; // navigation privée : on garde le menu ouvert
         }
     });
+    const [survole, setSurvole] = useState(false);
+    const minuteurFermeture = useRef(null);
+
+    const sidebarOuverte = epingle || survole;
 
     function basculerMenu() {
-        setSidebarOuverte((ouverte) => {
+        setEpingle((etaitEpingle) => {
             try {
-                localStorage.setItem('sopal-menu-replie', ouverte ? '1' : '0');
+                localStorage.setItem('sopal-menu-replie', etaitEpingle ? '1' : '0');
             } catch {
                 // Stockage indisponible : le choix vaudra pour cette page seulement.
             }
-            return !ouverte;
+            return !etaitEpingle;
         });
+        setSurvole(false);
     }
+
+    /** Ouvre immédiatement, et annule une fermeture en cours. */
+    function ouvrirAuSurvol() {
+        clearTimeout(minuteurFermeture.current);
+        setSurvole(true);
+    }
+
+    /**
+     * Ferme avec un court délai : sans lui, traverser un bord ou passer sur une
+     * barre de défilement referme le menu par accident.
+     */
+    function fermerApresDelai() {
+        clearTimeout(minuteurFermeture.current);
+        minuteurFermeture.current = setTimeout(() => setSurvole(false), 250);
+    }
+
+    // Évite qu'un minuteur en attente ne s'exécute après un changement de page.
+    useEffect(() => () => clearTimeout(minuteurFermeture.current), []);
 
     // Message flash (redirect()->with('erreur'/'succes', ...) côté Laravel,
     // voir HandleInertiaRequests::share()) affiché en toast une seule fois
@@ -140,12 +170,35 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
             <Head title={titleSuffix ? `${title} — ${titleSuffix.texte}` : title} />
 
             <div className="flex h-screen">
-                {/* Menu latéral bleu marine. h-screen (pas min-h-screen) : reste plaqué à
-                    la hauteur de l'écran et ne défile JAMAIS avec le contenu, quelle que
-                    soit la position du scroll. */}
+                {/*
+                    Bande sensible le long du bord gauche : y amener la souris
+                    fait apparaître le menu. Elle n'existe que si le menu est
+                    replié, et laisse passer les clics ailleurs.
+                */}
+                {!epingle && (
+                    <div
+                        onMouseEnter={ouvrirAuSurvol}
+                        className="fixed top-0 left-0 h-full w-4 z-40"
+                        aria-hidden="true"
+                    />
+                )}
+
+                {/*
+                    Menu latéral. Épinglé, il occupe sa place dans la mise en
+                    page ; replié, il passe en position fixe et glisse PAR-DESSUS
+                    le contenu — qui ne bouge alors plus du tout.
+                    h-screen (pas min-h-screen) : reste plaqué à la hauteur de
+                    l'écran et ne défile jamais avec le contenu.
+                */}
                 <aside
-                    className={`shrink-0 h-screen bg-[#0d2b52] dark:bg-gray-900 text-white flex flex-col border-r border-black/10 dark:border-white/5 overflow-y-auto overflow-x-hidden transition-[width] duration-200 ${
-                        sidebarOuverte ? 'w-64' : 'w-0 border-r-0'
+                    onMouseEnter={epingle ? undefined : ouvrirAuSurvol}
+                    onMouseLeave={epingle ? undefined : fermerApresDelai}
+                    className={`h-screen bg-[#0d2b52] dark:bg-gray-900 text-white flex flex-col border-r border-black/10 dark:border-white/5 overflow-y-auto overflow-x-hidden w-64 ${
+                        epingle
+                            ? 'shrink-0'
+                            : `fixed top-0 left-0 z-40 shadow-2xl transition-transform duration-200 ${
+                                  survole ? 'translate-x-0' : '-translate-x-full'
+                              }`
                     }`}
                 >
                     {/* Carte logo + intitulé de l'outil */}
@@ -153,14 +206,30 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                         <div className="rounded-2xl bg-white/[0.07] border border-white/10 p-4">
                             <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-center relative">
                                 <img src="/images/logo-sopal.png" alt="Sopal" className="h-10 w-auto" />
+                                {/* Épingle / désépingle. L'intitulé suit l'état réel :
+                                    le menu apparu au survol n'est pas "replié", il n'est
+                                    pas encore épinglé. */}
                                 <button
                                     type="button"
                                     onClick={basculerMenu}
-                                    title="Replier le menu"
-                                    aria-label="Replier le menu"
-                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-lg text-[#0d2b52]/50 hover:text-[#0d2b52] hover:bg-[#0d2b52]/10 transition-colors"
+                                    title={
+                                        epingle
+                                            ? 'Replier le menu — il reviendra en approchant la souris du bord gauche'
+                                            : 'Épingler le menu — il restera ouvert'
+                                    }
+                                    aria-label={epingle ? 'Replier le menu' : 'Épingler le menu'}
+                                    aria-pressed={epingle}
+                                    className={`absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-lg transition-colors ${
+                                        epingle
+                                            ? 'text-[#0d2b52]/50 hover:text-[#0d2b52] hover:bg-[#0d2b52]/10'
+                                            : 'text-[#0d2b52] bg-[#0d2b52]/10 hover:bg-[#0d2b52]/20'
+                                    }`}
                                 >
-                                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none">
+                                    <svg
+                                        className={`h-4 w-4 transition-transform ${epingle ? '' : 'rotate-180'}`}
+                                        viewBox="0 0 20 20"
+                                        fill="none"
+                                    >
                                         <path
                                             d="M12.5 5 7.5 10l5 5"
                                             stroke="currentColor"
@@ -225,9 +294,10 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                 {!sidebarOuverte && (
                     <button
                         type="button"
+                        onMouseEnter={ouvrirAuSurvol}
                         onClick={basculerMenu}
-                        title="Afficher le menu"
-                        aria-label="Afficher le menu"
+                        title="Épingler le menu (il reste ouvert)"
+                        aria-label="Épingler le menu"
                         className="fixed top-5 left-2 z-30 h-9 w-9 flex items-center justify-center rounded-lg bg-[#0d2b52] dark:bg-gray-800 text-white shadow-lg hover:bg-[#0d2b52]/90 transition-colors"
                     >
                         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none">
@@ -245,8 +315,8 @@ export default function AppLayout({ title, titleSuffix = null, subtitle, childre
                     d'ouverture, qui sinon recouvre le haut du contenu (le lien
                     "Retour à ..." des fiches article, par exemple). */}
                 <main
-                    className={`flex-1 h-screen overflow-y-auto overflow-x-hidden transition-[padding] duration-200 ${
-                        sidebarOuverte ? '' : 'pl-14'
+                    className={`flex-1 h-screen overflow-y-auto overflow-x-hidden ${
+                        epingle ? '' : 'pl-14'
                     }`}
                 >
                     <header className="px-8 pt-8 pb-4">
