@@ -315,10 +315,13 @@ function TableauSuivi({ suivi, stockSource }) {
             )}
 
             <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse table-fixed">
+                <table className="w-full text-sm border-collapse">
+                    {/* Largeurs indicatives : sans table-fixed, le navigateur les
+                        respecte tant que le contenu tient, et elargit la colonne
+                        sinon. Rien n'est donc jamais coupe. */}
                     <colgroup>
                         {colonnes.map((col) => (
-                            <col key={col.cle} style={{ width: largeurs[col.cle] ?? col.largeur }} />
+                            <col key={col.cle} style={{ minWidth: largeurs[col.cle] ?? col.largeur }} />
                         ))}
                     </colgroup>
                     <thead>
@@ -345,7 +348,7 @@ function TableauSuivi({ suivi, stockSource }) {
                                             onChange={setObjets}
                                         />
                                     ) : (
-                                        <span className="block truncate">{col.label}</span>
+                                        col.label
                                     )}
 
                                     {/* Poignee de redimensionnement, sur le bord droit */}
@@ -388,24 +391,15 @@ function TableauSuivi({ suivi, stockSource }) {
                                         '—'
                                     )}
                                 </td>
-                                <td
-                                    className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 truncate"
-                                    title={l.Designation || ''}
-                                >
+                                <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
                                     {l.Designation || '—'}
                                 </td>
                                 {avecObjet && (
-                                    <td
-                                        className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 truncate"
-                                        title={l.Objet || ''}
-                                    >
+                                    <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
                                         {l.Objet || '—'}
                                     </td>
                                 )}
-                                <td
-                                    className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 truncate"
-                                    title={l.Emetteur || ''}
-                                >
+                                <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
                                     {l.Emetteur || '—'}
                                 </td>
                                 <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-right tabular-nums text-gray-900 dark:text-gray-200">
