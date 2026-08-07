@@ -26,5 +26,17 @@ export function useResizableColumns(initialWidths) {
         document.addEventListener('mouseup', onMouseUp);
     }
 
-    return [widths, startResize, colonneActive];
+    /** Rend a une colonne sa largeur d'origine (double-clic sur la poignee). */
+    function resetWidth(key, largeurParDefaut) {
+        setWidths((w) => {
+            const copie = { ...w };
+            if (largeurParDefaut === undefined) delete copie[key];
+            else copie[key] = largeurParDefaut;
+            return copie;
+        });
+    }
+
+    // 4e valeur ajoutee APRES coup : les appelants qui n'en veulent pas
+    // (StockProduction) continuent de fonctionner sans modification.
+    return [widths, startResize, colonneActive, resetWidth];
 }

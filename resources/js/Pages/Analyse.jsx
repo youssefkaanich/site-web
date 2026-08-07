@@ -4,10 +4,31 @@ import AppLayout from '../Layouts/AppLayout';
 import FiltreColonne, { valeursDistinctes } from '../Components/FiltreColonne';
 import { IconCheck, IconClock, IconLoader } from '../Components/Icons';
 import { toast } from '../hooks/toast';
+import { useResizableColumns } from '../hooks/useResizableColumns';
 
 /** Libellé des lignes sans émetteur dans le filtre (même convention que Gestion.jsx). */
 const EMETTEUR_VIDE = '(non renseigné)';
 const OBJET_VIDE = '(sans objet)';
+
+/**
+ * Colonnes du tableau de suivi.
+ *
+ * La cle est STABLE : c'est elle qui retient la largeur choisie a la souris,
+ * y compris quand la colonne Objet apparait ou disparait selon l'onglet.
+ * `largeur` n'est que la valeur de depart, ajustee au contenu attendu.
+ */
+const COLONNES_SUIVI = [
+    { cle: 'article', label: 'Article', largeur: 130 },
+    { cle: 'designation', label: 'Désignation', largeur: 260 },
+    { cle: 'objet', label: 'Objet', largeur: 220, exportSeul: true },
+    { cle: 'emetteur', label: 'Émetteur', largeur: 170 },
+    { cle: 'qteDemandee', label: 'Qté demandée', largeur: 110, nombre: true },
+    { cle: 'reste', label: 'Reste à livrer', largeur: 110, nombre: true },
+    { cle: 'rupture', label: 'Qté en rupture', largeur: 110, nombre: true },
+    { cle: 'stock', label: 'Qté en stock', largeur: 110, nombre: true },
+    { cle: 'plan', label: 'Plan de service', largeur: 240 },
+    { cle: 'servir', label: 'Servir', largeur: 230 },
+];
 
 function CarteStat({ label, value, accent }) {
     return (
@@ -182,6 +203,8 @@ function TableauSuivi({ suivi, stockSource }) {
     // Filtres de colonne : liste vide = tout est affiché.
     const [emetteurs, setEmetteurs] = useState([]);
     const [objets, setObjets] = useState([]);
+    // Largeurs ajustables a la souris (meme mecanisme que Stock / Production).
+    const [largeurs, redimensionner, colonneRedimensionnee, largeurParDefaut] = useResizableColumns({});
 
     const lignesDuService = suivi.filter((s) => s.categorie === categorie);
     const compter = (c) => suivi.filter((s) => s.categorie === c).length;
@@ -194,6 +217,9 @@ function TableauSuivi({ suivi, stockSource }) {
     // page Commandes servies). Chantier et Commercial se regroupent par
     // emetteur, ou l'objet n'apporte rien.
     const avecObjet = categorie === 'export';
+
+    // Colonnes visibles : Objet n'apparait que sur Export.
+    const colonnes = COLONNES_SUIVI.filter((c) => !c.exportSeul || avecObjet);
 
     // Valeurs proposées, calculées AVANT le filtre : sinon la liste se
     // réduirait à mesure qu'on coche et on ne pourrait plus rien décocher.
@@ -289,42 +315,54 @@ function TableauSuivi({ suivi, stockSource }) {
             )}
 
             <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
+                <table className="w-full text-sm border-collapse table-fixed">
+                    <colgroup>
+                        {colonnes.map((col) => (
+                            <col key={col.cle} style={{ width: largeurs[col.cle] ?? col.largeur }} />
+                        ))}
+                    </colgroup>
                     <thead>
                         <tr className="text-left text-gray-500 dark:text-gray-400">
-                            {[
-                                'Article',
-                                'Désignation',
-                                ...(avecObjet ? ['Objet'] : []),
-                                'Émetteur',
-                                'Qté demandée',
-                                'Reste à livrer',
-                                'Qté en rupture',
-                                'Qté en stock',
-                                'Plan de service',
-                                'Servir',
-                            ].map((label) => (
+                            {colonnes.map((col) => (
                                 <th
-                                    key={label}
-                                    className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide bg-gray-50 dark:bg-gray-800 border-y border-r border-gray-200 dark:border-gray-700 last:border-r-0"
+                                    key={col.cle}
+                                    className={`relative px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide select-none bg-gray-50 dark:bg-gray-800 border-y border-r border-gray-200 dark:border-gray-700 last:border-r-0 ${
+                                        col.nombre ? 'text-right' : 'text-left'
+                                    }`}
                                 >
-                                    {label === 'Émetteur' ? (
+                                    {col.cle === 'emetteur' ? (
                                         <FiltreColonne
-                                            label={label}
+                                            label={col.label}
                                             valeurs={emetteursDisponibles}
                                             selection={emetteurs}
                                             onChange={setEmetteurs}
                                         />
-                                    ) : label === 'Objet' ? (
+                                    ) : col.cle === 'objet' ? (
                                         <FiltreColonne
-                                            label={label}
+                                            label={col.label}
                                             valeurs={objetsDisponibles}
                                             selection={objets}
                                             onChange={setObjets}
                                         />
                                     ) : (
-                                        label
+                                        <span className="block truncate">{col.label}</span>
                                     )}
+
+                                    {/* Poignee de redimensionnement, sur le bord droit */}
+                                    <span
+                                        onMouseDown={(e) => redimensionner(e, col.cle)}
+                                        onDoubleClick={() => largeurParDefaut(col.cle, col.largeur)}
+                                        title="Glisser pour elargir - double-clic pour revenir a la largeur d'origine"
+                                        className="absolute top-0 right-0 flex h-full w-3 -mr-1.5 cursor-col-resize items-stretch justify-center z-10 group"
+                                    >
+                                        <span
+                                            className={`w-[3px] my-1 rounded-full transition-all duration-150 ${
+                                                colonneRedimensionnee === col.cle
+                                                    ? 'bg-[#0d2b52] dark:bg-blue-400 w-1'
+                                                    : 'bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-400 group-hover:w-1'
+                                            }`}
+                                        />
+                                    </span>
                                 </th>
                             ))}
                         </tr>
@@ -350,18 +388,24 @@ function TableauSuivi({ suivi, stockSource }) {
                                         '—'
                                     )}
                                 </td>
-                                <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
+                                <td
+                                    className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 truncate"
+                                    title={l.Designation || ''}
+                                >
                                     {l.Designation || '—'}
                                 </td>
                                 {avecObjet && (
                                     <td
-                                        className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 max-w-[220px] truncate"
+                                        className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 truncate"
                                         title={l.Objet || ''}
                                     >
                                         {l.Objet || '—'}
                                     </td>
                                 )}
-                                <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
+                                <td
+                                    className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 truncate"
+                                    title={l.Emetteur || ''}
+                                >
                                     {l.Emetteur || '—'}
                                 </td>
                                 <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-right tabular-nums text-gray-900 dark:text-gray-200">
@@ -416,7 +460,7 @@ function TableauSuivi({ suivi, stockSource }) {
                         ))}
                         {lignes.length === 0 && (
                             <tr>
-                                <td colSpan={9} className="px-4 py-10 text-center text-gray-400 dark:text-gray-600">
+                                <td colSpan={colonnes.length} className="px-4 py-10 text-center text-gray-400 dark:text-gray-600">
                                     {emetteurs.length > 0
                                         ? 'Aucune commande pour cet émetteur.'
                                         : 'Aucune commande dans cet onglet.'}
