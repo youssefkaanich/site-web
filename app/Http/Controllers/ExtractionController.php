@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
@@ -17,10 +18,17 @@ class ExtractionController extends Controller
     /** Durée maximale d'une surveillance avant arrêt automatique (1 jour). */
     private const DUREE_MAX_SECONDES = 86400;
 
-    public function start(string $source)
+    public function start(string $source, Request $request)
     {
         if (!isset(self::SCRIPTS[$source])) {
             abort(404);
+        }
+
+        // Enregistrée AVANT le lancement : env() la relit pour la passer au
+        // script Python.
+        $periode = (string) $request->input('periode', '');
+        if (isset(self::PERIODES[$periode])) {
+            Cache::forever('extraction:periode', $periode);
         }
 
         if (self::estActif($source)) {
@@ -109,6 +117,9 @@ class ExtractionController extends Controller
             'message_outlook' => end($journalOutlook)['message'] ?? null,
             'journal_gmail' => $journalGmail,
             'journal_outlook' => $journalOutlook,
+            // Sélecteur de période affiché à côté des boutons d'extraction.
+            'periode' => self::periode(),
+            'periodes' => self::PERIODES,
         ];
     }
 
@@ -170,6 +181,32 @@ class ExtractionController extends Controller
         return false;
     }
 
+    /**
+     * Périodes proposées par le sélecteur placé à côté du bouton « Extraire ».
+     * La clé est ce qui transite ; la valeur est ce que comprend le script
+     * Python (voir DEPUIS dans extract_gmail_commandes.py).
+     *
+     * Liste FERMÉE : une valeur envoyée à la main qui n'y figure pas est
+     * ignorée au profit du défaut, pour qu'aucune chaîne arbitraire ne
+     * parvienne au script.
+     */
+    public const PERIODES = [
+        '1jours' => "Aujourd'hui",
+        '7jours' => '1 semaine',
+        '14jours' => '2 semaines',
+        '30jours' => '1 mois',
+    ];
+
+    public const PERIODE_DEFAUT = '30jours';
+
+    /** Période retenue pour la prochaine extraction (mémorisée entre deux visites). */
+    public static function periode(): string
+    {
+        $valeur = Cache::get('extraction:periode', self::PERIODE_DEFAUT);
+
+        return isset(self::PERIODES[$valeur]) ? $valeur : self::PERIODE_DEFAUT;
+    }
+
     /** Variables d'environnement nécessaires pour lancer un script Python depuis PHP sur Windows. */
     public static function env(): array
     {
@@ -182,6 +219,8 @@ class ExtractionController extends Controller
             'PYTHONUTF8' => '1',
             'SOPAL_APP_PASSWORD' => env('SOPAL_APP_PASSWORD'),
             'CEREBRAS_API_KEY' => env('CEREBRAS_API_KEY'),
+            // Période choisie sur le site ; le script s'en sert pour DEPUIS.
+            'SOPAL_DEPUIS' => self::periode(),
             'SOPAL_DB_HOST' => config('database.connections.mysql.host'),
             'SOPAL_DB_PORT' => (string) config('database.connections.mysql.port'),
             'SOPAL_DB_NAME' => config('database.connections.mysql.database'),

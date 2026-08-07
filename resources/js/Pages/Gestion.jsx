@@ -404,13 +404,49 @@ function CommandeModal({ commande, onClose }) {
     );
 }
 
-function ExtractionButton({ label, colorOn, source, running, busy, setBusy }) {
+/**
+ * Choix de la periode a extraire, a cote des boutons d'extraction.
+ *
+ * Verrouille pendant qu'une extraction tourne : le script lit la periode
+ * UNE SEULE FOIS a son demarrage. La changer en cours de route n'aurait
+ * aucun effet et laisserait croire le contraire.
+ */
+function SelecteurPeriode({ valeur, choix, onChange, verrouille }) {
+    const entrees = Object.entries(choix);
+    if (entrees.length === 0) return null;
+
+    return (
+        <label className="flex items-center gap-2 text-sm">
+            <span className="font-semibold text-gray-600 dark:text-gray-300">Extraire les mails de</span>
+            <select
+                value={valeur}
+                onChange={(e) => onChange(e.target.value)}
+                disabled={verrouille}
+                title={
+                    verrouille
+                        ? "Arrete l'extraction en cours pour changer la periode"
+                        : 'Periode de mails a parcourir au prochain demarrage'
+                }
+                className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#0d2b52]/30"
+            >
+                {entrees.map(([cle, libelle]) => (
+                    <option key={cle} value={cle}>
+                        {libelle}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
+}
+
+function ExtractionButton({ label, colorOn, source, running, busy, setBusy, periode }) {
     const busyMoi = busy === source;
 
     function toggler() {
         setBusy(source);
         const action = running ? 'stop' : 'start';
-        router.post(`/extraction/${source}/${action}`, {}, {
+        // La periode n'est utile qu'au demarrage ; a l'arret elle est ignoree.
+        router.post(`/extraction/${source}/${action}`, running ? {} : { periode }, {
             preserveScroll: true,
             onFinish: () => setBusy((b) => (b === source ? null : b)),
         });
@@ -473,6 +509,8 @@ export default function Gestion({
     groupeValeur = null,
     groupes = [],
 }) {
+    // Periode d'extraction : valeur venue du serveur, modifiable a l'ecran.
+    const [periode, setPeriode] = useState(extraction.periode ?? '30jours');
     const [modalCommande, setModalCommande] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [filtre, setFiltre] = useState(null); // null | 'urgentes' | 'echeance' | 'sansQte'
@@ -756,6 +794,12 @@ export default function Gestion({
             )}
 
             <div className="flex flex-wrap items-center gap-3 mb-6">
+                <SelecteurPeriode
+                    valeur={periode}
+                    choix={extraction.periodes ?? {}}
+                    onChange={setPeriode}
+                    verrouille={extraction.gmail || extraction.outlook}
+                />
                 <ExtractionButton
                     label="Gmail"
                     colorOn="bg-[#0d2b52] hover:bg-[#0d2b52]/90"
@@ -763,6 +807,7 @@ export default function Gestion({
                     running={extraction.gmail}
                     busy={busy}
                     setBusy={setBusy}
+                    periode={periode}
                 />
                 <ExtractionButton
                     label="Outlook"
@@ -771,6 +816,7 @@ export default function Gestion({
                     running={extraction.outlook}
                     busy={busy}
                     setBusy={setBusy}
+                    periode={periode}
                 />
                 {extraction.gmail && (
                     <span className="text-sm font-semibold text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-900/30 px-3 py-1.5 rounded-lg">
