@@ -319,6 +319,9 @@ class CommandeController extends Controller
                     'Article' => $c['Article'],
                     'Designation' => $c['Designation'],
                     'Emetteur' => $c['Emetteur'],
+                    // Objet du mail : sert au filtre de la vue Export, comme
+                    // sur les pages Commandes et Commandes servies.
+                    'Objet' => $c['Objet'] ?? null,
                     'Date_mail' => $c['Date_mail'],
                     'Urgent' => $c['Urgent'],
                     'Note' => $c['Note'],

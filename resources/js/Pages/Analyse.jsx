@@ -7,6 +7,7 @@ import { toast } from '../hooks/toast';
 
 /** Libellé des lignes sans émetteur dans le filtre (même convention que Gestion.jsx). */
 const EMETTEUR_VIDE = '(non renseigné)';
+const OBJET_VIDE = '(sans objet)';
 
 function CarteStat({ label, value, accent }) {
     return (
@@ -178,8 +179,9 @@ function TableauSuivi({ suivi, stockSource }) {
     const [categorie, setCategorie] = useState('export');
     const [notes, setNotes] = useState({});
     const [enregistrement, setEnregistrement] = useState(null);
-    // Filtre par émetteur : liste vide = tous affichés.
+    // Filtres de colonne : liste vide = tout est affiché.
     const [emetteurs, setEmetteurs] = useState([]);
+    const [objets, setObjets] = useState([]);
 
     const lignesDuService = suivi.filter((s) => s.categorie === categorie);
     const compter = (c) => suivi.filter((s) => s.categorie === c).length;
@@ -187,20 +189,30 @@ function TableauSuivi({ suivi, stockSource }) {
     // quand on passe de l'un à l'autre.
     const sousOngletActif = categorie === 'export' || categorie === 'chantier';
 
-    // Émetteurs proposés, calculés AVANT le filtre : sinon la liste se
+    // La colonne Objet n'est montrée que sur Export : c'est le critere de
+    // regroupement de cette vue partout ailleurs sur le site (page Commandes,
+    // page Commandes servies). Chantier et Commercial se regroupent par
+    // emetteur, ou l'objet n'apporte rien.
+    const avecObjet = categorie === 'export';
+
+    // Valeurs proposées, calculées AVANT le filtre : sinon la liste se
     // réduirait à mesure qu'on coche et on ne pourrait plus rien décocher.
     const emetteursDisponibles = valeursDistinctes(lignesDuService, 'Emetteur', EMETTEUR_VIDE);
+    const objetsDisponibles = valeursDistinctes(lignesDuService, 'Objet', OBJET_VIDE);
 
-    const lignes =
-        emetteurs.length === 0
-            ? lignesDuService
-            : lignesDuService.filter((l) => emetteurs.includes((l.Emetteur || '').trim() || EMETTEUR_VIDE));
+    // Les deux filtres se combinent : un objet ET un emetteur.
+    const lignes = lignesDuService.filter(
+        (l) =>
+            (emetteurs.length === 0 || emetteurs.includes((l.Emetteur || '').trim() || EMETTEUR_VIDE)) &&
+            (!avecObjet || objets.length === 0 || objets.includes((l.Objet || '').trim() || OBJET_VIDE))
+    );
 
-    // Changer d'onglet remet le filtre à zéro : les émetteurs d'une catégorie
+    // Changer d'onglet remet les filtres à zéro : les valeurs d'une catégorie
     // n'ont aucune raison d'exister dans l'autre.
     function changerCategorie(c) {
         setCategorie(c);
         setEmetteurs([]);
+        setObjets([]);
     }
 
     function enregistrerNote(ligne) {
@@ -280,7 +292,18 @@ function TableauSuivi({ suivi, stockSource }) {
                 <table className="w-full text-sm border-collapse">
                     <thead>
                         <tr className="text-left text-gray-500 dark:text-gray-400">
-                            {['Article', 'Désignation', 'Émetteur', 'Qté demandée', 'Reste à livrer', 'Qté en rupture', 'Qté en stock', 'Plan de service', 'Servir'].map((label) => (
+                            {[
+                                'Article',
+                                'Désignation',
+                                ...(avecObjet ? ['Objet'] : []),
+                                'Émetteur',
+                                'Qté demandée',
+                                'Reste à livrer',
+                                'Qté en rupture',
+                                'Qté en stock',
+                                'Plan de service',
+                                'Servir',
+                            ].map((label) => (
                                 <th
                                     key={label}
                                     className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide bg-gray-50 dark:bg-gray-800 border-y border-r border-gray-200 dark:border-gray-700 last:border-r-0"
@@ -291,6 +314,13 @@ function TableauSuivi({ suivi, stockSource }) {
                                             valeurs={emetteursDisponibles}
                                             selection={emetteurs}
                                             onChange={setEmetteurs}
+                                        />
+                                    ) : label === 'Objet' ? (
+                                        <FiltreColonne
+                                            label={label}
+                                            valeurs={objetsDisponibles}
+                                            selection={objets}
+                                            onChange={setObjets}
                                         />
                                     ) : (
                                         label
@@ -323,6 +353,14 @@ function TableauSuivi({ suivi, stockSource }) {
                                 <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
                                     {l.Designation || '—'}
                                 </td>
+                                {avecObjet && (
+                                    <td
+                                        className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200 max-w-[220px] truncate"
+                                        title={l.Objet || ''}
+                                    >
+                                        {l.Objet || '—'}
+                                    </td>
+                                )}
                                 <td className="px-4 py-2.5 border-r border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-200">
                                     {l.Emetteur || '—'}
                                 </td>
