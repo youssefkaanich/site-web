@@ -235,6 +235,13 @@
   "Vite manifest not found"
       -> npm ci   puis   npm run build
 
+  "L'import a echoue" sur le fichier de mouvements
+      -> Fichier plus gros que la limite de PHP. Dans php.ini :
+           upload_max_filesize=128M
+           post_max_size=128M
+         puis RELANCER php artisan serve (php.ini est lu au demarrage).
+         Ces limites ne sont pas versionnees : a refaire sur un PC neuf.
+
   "Failed to open stream" sur un script Python
       -> Le dossier "C:\STAGE\projet sopal" est absent ou mal nomme.
          Le chemin est ecrit en dur dans StockStore et MouvementStore.

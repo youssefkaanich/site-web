@@ -9,6 +9,34 @@ import {
     IconTrash,
 } from './Icons';
 
+/**
+ * Message d'erreur d'import, aussi precis que possible.
+ *
+ * Le cas le plus fréquent — un fichier trop volumineux — ne produit AUCUN
+ * message du serveur : PHP jette la requête entière avant que Laravel la
+ * voie (post_max_size). Sans ce traitement, l'utilisateur ne voyait qu'un
+ * « L'import a échoué. » sans aucune piste.
+ */
+function messageErreur(e, fichier) {
+    const precis = e.response?.data?.erreur;
+    if (precis) return precis;
+
+    const taille = fichier ? ` (${(fichier.size / 1048576).toFixed(1)} Mo)` : '';
+
+    if (e.response?.status === 413 || !e.response) {
+        return `Le fichier${taille} est trop volumineux pour être envoyé, ou la connexion a été interrompue. `
+            + `La limite du serveur est de 128 Mo.`;
+    }
+    if (e.response.status === 422) {
+        return `Fichier refusé${taille} : vérifie qu'il s'agit bien d'un .xls ou .xlsx.`;
+    }
+    if (e.response.status >= 500) {
+        return `Le serveur a rencontré une erreur en traitant le fichier${taille}. `
+            + `Regarde storage/logs/laravel.log pour le détail.`;
+    }
+    return `L'import a échoué${taille} (code ${e.response.status}).`;
+}
+
 function formaterNombre(valeur, decimales = 2) {
     if (valeur === null || valeur === undefined || valeur === '') return '—';
     return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: decimales }).format(valeur);
@@ -164,7 +192,7 @@ export default function ImportsStock({ pret, erreur, reference, mouvements, impo
                 surSucces(data);
                 router.reload();
             })
-            .catch((e) => setErreurImport(e.response?.data?.erreur ?? "L'import a échoué."))
+            .catch((e) => setErreurImport(messageErreur(e, fichier)))
             .finally(() => {
                 setImportEnCours(null);
                 evenement.target.value = '';
