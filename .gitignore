@@ -24,3 +24,10 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Exports de commandes : donnees reelles, jamais sur GitHub
+commandes_*.xlsx
+test_import_*.xlsx
+
+# Base SQLite egaree a la racine
+/sopal
